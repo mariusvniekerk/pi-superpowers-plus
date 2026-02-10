@@ -174,6 +174,20 @@ describe("WorkflowHandler", () => {
       expect(result!.type).toBe("commit-without-verification");
     });
 
+    test("returns violation on git push after failing test run", () => {
+      handler.handleBashResult("npx vitest run", "1 failing", 1);
+      const result = handler.checkCommitGate("git push origin main");
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe("push-without-verification");
+    });
+
+    test("returns violation on PR creation after failing test run", () => {
+      handler.handleBashResult("npx vitest run", "1 failing", 1);
+      const result = handler.checkCommitGate("gh pr create --title 'feat'");
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe("pr-without-verification");
+    });
+
     test("invalidates previous verification after a later failing test run", () => {
       handler.handleBashResult("npx vitest run", "1 passed", 0);
       expect(handler.checkCommitGate("git commit -m 'feat'")).toBeNull();
