@@ -61,4 +61,66 @@ describe("WorkflowHandler", () => {
   test("getWidgetText returns empty when idle", () => {
     expect(handler.getWidgetText()).toBe("");
   });
+
+  // --- Debug monitor integration ---
+
+  test("activates debug mode on test failure", () => {
+    handler.handleBashResult("npx vitest run", "1 failing", 1);
+    expect(handler.isDebugActive()).toBe(true);
+  });
+
+  test("detects fix-without-investigation on source write after test failure", () => {
+    handler.handleBashResult("npx vitest run", "1 failing", 1);
+    const result = handler.handleToolCall("edit", { path: "src/foo.ts", oldText: "a", newText: "b" });
+    expect(result.violation?.type).toBe("fix-without-investigation");
+  });
+
+  test("no debug violation when investigated first", () => {
+    handler.handleBashResult("npx vitest run", "1 failing", 1);
+    handler.handleReadOrInvestigation("read", "src/foo.ts");
+    const result = handler.handleToolCall("edit", { path: "src/foo.ts", oldText: "a", newText: "b" });
+    expect(result.violation).toBeNull();
+  });
+
+  test("no debug violation when investigation bash command used", () => {
+    handler.handleBashResult("npx vitest run", "1 failing", 1);
+    handler.handleBashInvestigation("grep -rn 'error' src/");
+    const result = handler.handleToolCall("edit", { path: "src/foo.ts", oldText: "a", newText: "b" });
+    expect(result.violation).toBeNull();
+  });
+
+  test("tracks fix attempts across cycles", () => {
+    handler.handleBashResult("npx vitest run", "1 failing", 1); // initial fail
+    handler.handleReadOrInvestigation("read", "src/foo.ts");
+    handler.handleToolCall("edit", { path: "src/foo.ts", oldText: "a", newText: "b" });
+    handler.handleBashResult("npx vitest run", "1 failing", 1); // attempt 1
+    handler.handleReadOrInvestigation("read", "src/foo.ts");
+    handler.handleToolCall("edit", { path: "src/foo.ts", oldText: "b", newText: "c" });
+    handler.handleBashResult("npx vitest run", "1 failing", 1); // attempt 2
+    handler.handleReadOrInvestigation("read", "src/foo.ts");
+    handler.handleToolCall("edit", { path: "src/foo.ts", oldText: "c", newText: "d" });
+    handler.handleBashResult("npx vitest run", "1 failing", 1); // attempt 3
+    handler.handleReadOrInvestigation("read", "src/foo.ts");
+    const result = handler.handleToolCall("edit", { path: "src/foo.ts", oldText: "d", newText: "e" });
+    expect(result.violation?.type).toBe("excessive-fix-attempts");
+  });
+
+  test("debug resets on test pass", () => {
+    handler.handleBashResult("npx vitest run", "1 failing", 1);
+    handler.handleReadOrInvestigation("read", "src/foo.ts");
+    handler.handleToolCall("edit", { path: "src/foo.ts", oldText: "a", newText: "b" });
+    handler.handleBashResult("npx vitest run", "1 passing", 0); // pass
+    expect(handler.isDebugActive()).toBe(false);
+  });
+
+  test("debug resets on commit", () => {
+    handler.handleBashResult("npx vitest run", "1 failing", 1);
+    handler.handleBashResult("git commit -m 'fix'", "", 0);
+    expect(handler.isDebugActive()).toBe(false);
+  });
+
+  test("widget shows debug state when active", () => {
+    handler.handleBashResult("npx vitest run", "1 failing", 1);
+    expect(handler.getWidgetText()).toContain("Debug");
+  });
 });
