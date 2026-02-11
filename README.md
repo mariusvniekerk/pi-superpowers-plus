@@ -61,6 +61,27 @@ TDD: RED
 ```
 Color-coded: red for RED, green for GREEN, accent for REFACTOR. Hidden when idle.
 
+**Workflow Tracker:**
+- Shows a phase strip in the widget: `brainstorm → plan → execute → verify → review → finish`
+- Phase markers:
+  - `✓phase` = complete
+  - `–phase` = skipped
+  - `[phase]` = current active phase
+- Detection signals:
+  - Skill invocations (e.g. `/skill:brainstorming`, `/skill:writing-plans`, `/skill:executing-plans`)
+  - Plan artifacts written under `docs/plans/` (e.g. `*-design.md`, `*-implementation.md`)
+  - `plan_tracker` init calls (transitions into execute)
+- Prompts once at phase boundaries (non-enforcing): continue in-session, start fresh session, skip, or discuss
+
+**Fresh Session Handoff:**
+Use `/workflow-next` to start a new session for the next phase with optional artifact context:
+
+```bash
+/workflow-next plan docs/plans/2026-02-10-my-feature-design.md
+/workflow-next execute docs/plans/2026-02-11-my-feature-implementation.md
+/workflow-next verify
+```
+
 **Debug Enforcement:**
 - Debug mode activates only after **2 consecutive failing test runs**
 - The first failing test run immediately after writing a new test (intentional TDD RED verification) is excluded
