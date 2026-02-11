@@ -103,4 +103,53 @@ describe("branch safety monitor", () => {
     expect(text).toContain("⚠️ First write of this session.");
     expect(text).toContain("topic/branch");
   });
+
+  test("branch notice is shown again after session_switch resets state", async () => {
+    execSyncMock.mockImplementation((cmd: string) => {
+      if (cmd.startsWith("git branch")) return Buffer.from("branch-a\n");
+      throw new Error("unexpected command");
+    });
+
+    const fake = createFakePi();
+    workflowMonitorExtension(fake.api as any);
+
+    const onToolResult = getSingleHandler(fake.handlers, "tool_result");
+    const onSessionSwitch = getSingleHandler(fake.handlers, "session_switch");
+
+    const ctx = {
+      hasUI: false,
+      sessionManager: { getBranch: () => [] },
+      ui: { setWidget: () => {} },
+    };
+
+    const res1 = await onToolResult(
+      {
+        toolName: "bash",
+        input: { command: "echo 1" },
+        content: [{ type: "text", text: "one" }],
+        details: { exitCode: 0 },
+      },
+      ctx
+    );
+    expect(res1.content[0].text as string).toContain("branch-a");
+
+    await onSessionSwitch({}, ctx);
+
+    execSyncMock.mockImplementation((cmd: string) => {
+      if (cmd.startsWith("git branch")) return Buffer.from("branch-b\n");
+      throw new Error("unexpected command");
+    });
+
+    const res2 = await onToolResult(
+      {
+        toolName: "bash",
+        input: { command: "echo 2" },
+        content: [{ type: "text", text: "two" }],
+        details: { exitCode: 0 },
+      },
+      ctx
+    );
+
+    expect(res2.content[0].text as string).toContain("branch-b");
+  });
 });
