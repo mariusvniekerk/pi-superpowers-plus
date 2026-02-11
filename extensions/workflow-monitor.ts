@@ -248,11 +248,19 @@ export default function (pi: ExtensionAPI) {
     const nextSkill = phaseToSkill[prompt.nextPhase] ?? "writing-plans";
     const nextInSession = `/skill:${nextSkill}`;
     const fresh = `/workflow-next ${prompt.nextPhase}${prompt.artifactPath ? ` ${prompt.artifactPath}` : ""}`;
+    const finishReminder =
+      "Before finishing:\n" +
+      "- Does this work require documentation updates? (README, CHANGELOG, API docs, inline docs)\n" +
+      "- What was learned during this implementation? (surprises, codebase knowledge, things to do differently)\n\n";
 
     if (selected === "next") {
-      ctx.ui.setEditorText(nextInSession);
+      ctx.ui.setEditorText(
+        prompt.nextPhase === "finish" ? finishReminder + nextInSession : nextInSession
+      );
     } else if (selected === "fresh") {
-      ctx.ui.setEditorText(fresh);
+      ctx.ui.setEditorText(
+        prompt.nextPhase === "finish" ? finishReminder + fresh : fresh
+      );
     } else if (selected === "skip") {
       const nextIdx = WORKFLOW_PHASES.indexOf(prompt.nextPhase);
       const phaseAfterSkip = WORKFLOW_PHASES[nextIdx + 1] ?? prompt.nextPhase;
