@@ -21,6 +21,7 @@ import {
   type DebugViolationType,
 } from "./workflow-monitor/warnings";
 import { loadReference, REFERENCE_TOPICS } from "./workflow-monitor/reference-tool";
+import { parseTestCommand, parseTestResult } from "./workflow-monitor/test-runner";
 import {
   WORKFLOW_PHASES,
   WORKFLOW_TRACKER_ENTRY_TYPE,
@@ -152,6 +153,17 @@ export default function (pi: ExtensionAPI) {
       const exitCode = (event.details as any)?.exitCode as number | undefined;
       handler.handleBashResult(command, output, exitCode);
 
+      const isTestCommand = parseTestCommand(command);
+      const passed = isTestCommand ? parseTestResult(output, exitCode) : null;
+      if (passed === true) {
+        const state = handler.getWorkflowState();
+        if (state?.currentPhase === "verify" && state.phases.verify === "active") {
+          if (handler.completeCurrentWorkflowPhase()) {
+            persistWorkflowState();
+          }
+        }
+      }
+
       if (pendingVerificationViolation) {
         const violation = pendingVerificationViolation;
         pendingVerificationViolation = null;
@@ -176,25 +188,11 @@ export default function (pi: ExtensionAPI) {
   pi.on("agent_end", async (_event, ctx) => {
     if (!ctx.hasUI) return;
 
-    const state = handler.getWorkflowState();
-    if (!state) return;
-
-    let changed = false;
-    if (state.currentPhase && state.phases[state.currentPhase] === "active") {
-      changed = handler.completeCurrentWorkflowPhase() || changed;
-    }
-
     const latestState = handler.getWorkflowState();
     if (!latestState) return;
 
     const boundary = computeBoundaryToPrompt(latestState);
-    if (!boundary) {
-      if (changed) {
-        persistWorkflowState();
-        updateWidget(ctx);
-      }
-      return;
-    }
+    if (!boundary) return;
 
     const boundaryPhase = boundaryToPhase[boundary];
     const prompt = getTransitionPrompt(boundary, latestState.artifacts[boundaryPhase]);
@@ -207,7 +205,7 @@ export default function (pi: ExtensionAPI) {
         ? prompt.options.find((o) => o.choice === result || o.label === result)?.choice
         : result?.value ?? result?.choice ?? null;
 
-    const marked = handler.markWorkflowPromptedCurrent();
+    const marked = handler.markWorkflowPrompted(boundaryPhase);
     if (marked) {
       persistWorkflowState();
       updateWidget(ctx);
@@ -222,10 +220,13 @@ export default function (pi: ExtensionAPI) {
     } else if (selected === "fresh") {
       ctx.ui.setEditorText(fresh);
     } else if (selected === "skip") {
-      handler.advanceWorkflowTo(prompt.nextPhase);
+      const nextIdx = WORKFLOW_PHASES.indexOf(prompt.nextPhase);
+      const phaseAfterSkip = WORKFLOW_PHASES[nextIdx + 1] ?? prompt.nextPhase;
+      handler.advanceWorkflowTo(phaseAfterSkip);
       persistWorkflowState();
       updateWidget(ctx);
-      ctx.ui.setEditorText(nextInSession);
+      const skipSkill = phaseToSkill[phaseAfterSkip] ?? "writing-plans";
+      ctx.ui.setEditorText(`/skill:${skipSkill}`);
     }
   });
 
@@ -313,8 +314,9 @@ export default function (pi: ExtensionAPI) {
       }
 
       const [phase, artifact] = args.trim().split(/\s+/, 2);
-      if (!phase) {
-        ctx.ui.notify("Usage: /workflow-next <phase> [artifact-path]", "error");
+      const validPhases = new Set(["brainstorm", "plan", "execute", "verify", "review", "finish"]);
+      if (!phase || !validPhases.has(phase)) {
+        ctx.ui.notify("Usage: /workflow-next <phase> [artifact-path]  (phase: brainstorm|plan|execute|verify|review|finish)", "error");
         return;
       }
 

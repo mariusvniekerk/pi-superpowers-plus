@@ -1,11 +1,4 @@
-import type { Phase } from "./workflow-tracker";
-
-export type TransitionBoundary =
-  | "design_committed"
-  | "plan_ready"
-  | "execution_complete"
-  | "verification_passed"
-  | "review_complete";
+import type { Phase, TransitionBoundary } from "./workflow-tracker";
 
 export type TransitionChoice = "next" | "fresh" | "skip" | "discuss";
 

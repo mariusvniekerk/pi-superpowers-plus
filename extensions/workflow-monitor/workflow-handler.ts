@@ -39,7 +39,7 @@ export interface WorkflowHandler {
   handlePlanTrackerToolCall(input: Record<string, any>): boolean;
   getWorkflowState(): WorkflowTrackerState | null;
   restoreWorkflowStateFromBranch(branch: SessionEntry[]): void;
-  markWorkflowPromptedCurrent(): boolean;
+  markWorkflowPrompted(phase: Phase): boolean;
   completeCurrentWorkflowPhase(): boolean;
   advanceWorkflowTo(phase: Phase): boolean;
   resetState(): void;
@@ -196,10 +196,8 @@ export function createWorkflowHandler(): WorkflowHandler {
       }
     },
 
-    markWorkflowPromptedCurrent() {
-      const current = tracker.getState().currentPhase;
-      if (!current) return false;
-      return tracker.markPrompted(current);
+    markWorkflowPrompted(phase: Phase) {
+      return tracker.markPrompted(phase);
     },
 
     completeCurrentWorkflowPhase() {

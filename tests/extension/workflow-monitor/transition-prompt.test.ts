@@ -1,8 +1,39 @@
 import { describe, test, expect } from "vitest";
+import workflowMonitorExtension from "../../../extensions/workflow-monitor";
 import {
   WorkflowTracker,
   computeBoundaryToPrompt,
 } from "../../../extensions/workflow-monitor/workflow-tracker";
+
+type Handler = (event: any, ctx: any) => any;
+
+function createFakePi() {
+  const handlers = new Map<string, Handler[]>();
+  const appendedEntries: any[] = [];
+
+  return {
+    handlers,
+    appendedEntries,
+    api: {
+      on(event: string, handler: Handler) {
+        const list = handlers.get(event) ?? [];
+        list.push(handler);
+        handlers.set(event, list);
+      },
+      registerTool() {},
+      registerCommand() {},
+      appendEntry(customType: string, data: any) {
+        appendedEntries.push({ customType, data });
+      },
+    },
+  };
+}
+
+function getSingleHandler(handlers: Map<string, Handler[]>, event: string): Handler {
+  const list = handlers.get(event) ?? [];
+  expect(list.length).toBeGreaterThan(0);
+  return list[0]!;
+}
 
 describe("boundary prompting", () => {
   test("prompts after brainstorm complete", () => {
@@ -11,5 +42,138 @@ describe("boundary prompting", () => {
     t.completeCurrent();
     const boundary = computeBoundaryToPrompt(t.getState());
     expect(boundary).toBe("design_committed");
+  });
+
+  test("does not auto-complete active phase on generic agent_end", async () => {
+    const fake = createFakePi();
+    workflowMonitorExtension(fake.api as any);
+
+    const onInput = getSingleHandler(fake.handlers, "input");
+    const onAgentEnd = getSingleHandler(fake.handlers, "agent_end");
+
+    let selectCalls = 0;
+    const ctx = {
+      hasUI: true,
+      sessionManager: { getBranch: () => [] },
+      ui: {
+        setWidget: () => {},
+        select: async () => {
+          selectCalls += 1;
+          return "discuss";
+        },
+        setEditorText: () => {},
+        notify: () => {},
+      },
+    };
+
+    await onInput({ source: "user", input: "/skill:writing-plans" }, ctx);
+    await onAgentEnd({}, ctx);
+
+    expect(selectCalls).toBe(0);
+  });
+
+  test("prompts once for completed boundary and does not re-prompt", async () => {
+    const fake = createFakePi();
+    workflowMonitorExtension(fake.api as any);
+
+    const onInput = getSingleHandler(fake.handlers, "input");
+    const onAgentEnd = getSingleHandler(fake.handlers, "agent_end");
+
+    let selectCalls = 0;
+    const ctx = {
+      hasUI: true,
+      sessionManager: { getBranch: () => [] },
+      ui: {
+        setWidget: () => {},
+        select: async () => {
+          selectCalls += 1;
+          return "discuss";
+        },
+        setEditorText: () => {},
+        notify: () => {},
+      },
+    };
+
+    await onInput({ source: "user", input: "/skill:writing-plans" }, ctx);
+    await onInput({ source: "user", input: "/skill:executing-plans" }, ctx);
+
+    await onAgentEnd({}, ctx);
+    await onAgentEnd({}, ctx);
+
+    expect(selectCalls).toBe(1);
+  });
+
+  test("skip marks next phase skipped and advances beyond it", async () => {
+    const fake = createFakePi();
+    workflowMonitorExtension(fake.api as any);
+
+    const onInput = getSingleHandler(fake.handlers, "input");
+    const onAgentEnd = getSingleHandler(fake.handlers, "agent_end");
+
+    const editorTexts: string[] = [];
+    const ctx = {
+      hasUI: true,
+      sessionManager: { getBranch: () => [] },
+      ui: {
+        setWidget: () => {},
+        select: async () => "skip",
+        setEditorText: (text: string) => editorTexts.push(text),
+        notify: () => {},
+      },
+    };
+
+    await onInput({ source: "user", input: "/skill:brainstorming" }, ctx);
+
+    // Complete brainstorm naturally by moving to execute, leaving plan as a pending boundary.
+    await onInput({ source: "user", input: "/skill:executing-plans" }, ctx);
+
+    await onAgentEnd({}, ctx);
+
+    const latest = fake.appendedEntries.at(-1)?.data;
+    expect(latest.phases.plan).toBe("skipped");
+    expect(latest.currentPhase).toBe("execute");
+    expect(editorTexts.at(-1)).toBe("/skill:executing-plans");
+  });
+
+  test("verification boundary is prompted only after passing verification signal", async () => {
+    const fake = createFakePi();
+    workflowMonitorExtension(fake.api as any);
+
+    const onInput = getSingleHandler(fake.handlers, "input");
+    const onAgentEnd = getSingleHandler(fake.handlers, "agent_end");
+    const onToolResult = getSingleHandler(fake.handlers, "tool_result");
+
+    let selectCalls = 0;
+    const ctx = {
+      hasUI: true,
+      sessionManager: { getBranch: () => [] },
+      ui: {
+        setWidget: () => {},
+        select: async () => {
+          selectCalls += 1;
+          return "discuss";
+        },
+        setEditorText: () => {},
+        notify: () => {},
+      },
+    };
+
+    await onInput({ source: "user", input: "/skill:verification-before-completion" }, ctx);
+
+    await onAgentEnd({}, ctx);
+    expect(selectCalls).toBe(0);
+
+    await onToolResult(
+      {
+        toolName: "bash",
+        input: { command: "npm test" },
+        content: [{ type: "text", text: "167 passed" }],
+        details: { exitCode: 0 },
+      },
+      ctx
+    );
+
+    await onAgentEnd({}, ctx);
+    expect(selectCalls).toBe(1);
   });
 });
