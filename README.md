@@ -14,7 +14,13 @@ Your coding agent doesn't just know the rules — it follows them. Skills teach 
 - **Workflow Monitor** — enforces TDD discipline, tracks debug cycles, gates commits on verification, tracks workflow phase, and serves reference content on demand.
 - **Plan Tracker** — tracks task progress with a TUI widget.
 
-**After installation**, any time the agent writes a source file without a failing test, it gets a warning injected into the tool result. Any time it tries to `git commit` without passing tests, it gets blocked. The agent sees these warnings as part of its normal tool output — no configuration needed.
+**After installation**:
+- Any time the agent writes a source file without a failing test, it gets a warning injected into the tool result.
+- Any time it tries to `git commit` / `git push` / `gh pr create` without passing tests, it gets gated.
+- On the first tool output of a session (inside a git repo), the agent is shown the **current git branch (or detached HEAD short SHA)**.
+- On the first write/edit of a session (inside a git repo), the agent is warned to **confirm it’s on the correct branch/worktree** before continuing.
+
+The agent sees these warnings as part of its normal tool output — no configuration needed.
 
 ## Install
 
@@ -105,6 +111,14 @@ Activates after **2 consecutive failing test runs** (excluding intentional TDD r
 
 Blocks `git commit`, `git push`, and `gh pr create` when the agent hasn't run passing tests. Requires a fresh passing test run before shipping. Automatically clears after successful verification.
 
+#### Branch Safety (informational)
+
+Inside a git repo, the workflow monitor also tries to prevent "oops I just edited main" mistakes:
+- On the **first tool result** of a session, it injects `📌 Current branch: <branch-or-sha>`.
+- On the **first write/edit** of a session, it injects a warning reminding the agent to confirm the branch/worktree with the user.
+
+Outside a git repo, it stays silent.
+
 #### Workflow Tracker
 
 Tracks which workflow phase the agent is in and shows a phase strip in the TUI widget. Detection signals:
@@ -118,6 +132,8 @@ At phase boundaries, prompts the agent once (non-enforcing) with options:
 2. **Fresh session** — hand off to a new session via `/workflow-next`
 3. **Skip** — skip the next phase
 4. **Discuss** — keep chatting
+
+When transitioning into **finish**, the monitor pre-fills the editor with a reminder to consider documentation updates and to capture learnings before merging/shipping.
 
 The `/workflow-next` command starts a new session with artifact context:
 ```
@@ -211,6 +227,7 @@ pi-superpowers-plus/
 │       ├── heuristics.ts             # File classification (test vs source)
 │       ├── test-runner.ts            # Test command/result detection
 │       ├── investigation.ts          # Investigation signal detection
+│       ├── git.ts                    # Git branch/SHA detection (branch safety)
 │       ├── warnings.ts              # Violation warning content
 │       └── reference-tool.ts        # On-demand reference loading
 ├── skills/                           # 12 workflow skills (24 markdown files)
@@ -226,7 +243,7 @@ pi-superpowers-plus/
 │   ├── dispatching-parallel-agents/
 │   ├── using-git-worktrees/
 │   └── finishing-a-development-branch/
-└── tests/                            # 173 unit tests across 16 files
+└── tests/                            # 184 unit tests across 18 files
 ```
 
 ## Development
