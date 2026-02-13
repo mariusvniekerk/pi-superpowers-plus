@@ -95,13 +95,6 @@ export class WorkflowTracker {
       }
     }
 
-    for (let i = 0; i < nextIdx; i++) {
-      const p = WORKFLOW_PHASES[i]!;
-      if (this.state.phases[p] === "pending") {
-        this.state.phases[p] = "skipped";
-      }
-    }
-
     for (const p of WORKFLOW_PHASES) {
       if (p !== phase && this.state.phases[p] === "active") {
         this.state.phases[p] = "complete";
@@ -114,6 +107,19 @@ export class WorkflowTracker {
     }
 
     return true;
+  }
+
+  skipPhase(phase: Phase): boolean {
+    const status = this.state.phases[phase];
+    if (status !== "pending" && status !== "active") return false;
+    this.state.phases[phase] = "skipped";
+    return true;
+  }
+
+  skipPhases(phases: Phase[]): boolean {
+    let changed = false;
+    for (const p of phases) changed = this.skipPhase(p) || changed;
+    return changed;
   }
 
   completeCurrent(): boolean {
@@ -137,20 +143,28 @@ export class WorkflowTracker {
   }
 
   onInputText(text: string): boolean {
-    const trimmed = text.trim();
-    if (!trimmed.startsWith("/skill:")) return false;
+    const lines = text.split(/\r?\n/);
+    let changed = false;
 
-    const skill = trimmed.slice("/skill:".length).split(/\s+/)[0];
-    if (skill === "brainstorming") return this.advanceTo("brainstorm");
-    if (skill === "writing-plans") return this.advanceTo("plan");
-    if (skill === "executing-plans" || skill === "subagent-driven-development") {
-      return this.advanceTo("execute");
+    for (const line of lines) {
+      const match = line.match(/^\s*\/skill:([^\s]+)/);
+      if (!match) continue;
+
+      const skill = match[1];
+      let phase: Phase | null = null;
+
+      if (skill === "brainstorming") phase = "brainstorm";
+      else if (skill === "writing-plans") phase = "plan";
+      else if (skill === "executing-plans" || skill === "subagent-driven-development") {
+        phase = "execute";
+      } else if (skill === "verification-before-completion") phase = "verify";
+      else if (skill === "requesting-code-review") phase = "review";
+      else if (skill === "finishing-a-development-branch") phase = "finish";
+
+      if (phase && this.advanceTo(phase)) changed = true;
     }
-    if (skill === "verification-before-completion") return this.advanceTo("verify");
-    if (skill === "requesting-code-review") return this.advanceTo("review");
-    if (skill === "finishing-a-development-branch") return this.advanceTo("finish");
 
-    return false;
+    return changed;
   }
 
   onFileWritten(path: string): boolean {
