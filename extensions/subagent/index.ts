@@ -23,6 +23,7 @@ import { type ExtensionAPI, getMarkdownTheme } from "@mariozechner/pi-coding-age
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.js";
+import { log } from "../logging.js";
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
@@ -338,7 +339,8 @@ async function runSingleAgent(
 				let event: any;
 				try {
 					event = JSON.parse(line);
-				} catch {
+				} catch (err) {
+					log.debug(`Ignoring non-JSON line from subagent stdout: ${line.slice(0, 120)}`);
 					return;
 				}
 
@@ -416,14 +418,14 @@ async function runSingleAgent(
 		if (tmpPromptPath)
 			try {
 				fs.unlinkSync(tmpPromptPath);
-			} catch {
-				/* ignore */
+			} catch (err) {
+				log.debug(`Failed to clean up temp prompt file: ${tmpPromptPath} — ${err instanceof Error ? err.message : err}`);
 			}
 		if (tmpDir)
 			try {
 				fs.rmSync(tmpDir, { recursive: true, force: true });
-			} catch {
-				/* ignore */
+			} catch (err) {
+				log.debug(`Failed to clean up temp directory: ${tmpDir} — ${err instanceof Error ? err.message : err}`);
 			}
 	}
 }

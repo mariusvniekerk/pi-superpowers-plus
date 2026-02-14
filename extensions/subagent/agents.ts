@@ -7,6 +7,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
+import { log } from "../logging.js";
 
 export type AgentScope = "user" | "project" | "both";
 
@@ -26,7 +27,7 @@ export interface AgentDiscoveryResult {
 	projectAgentsDir: string | null;
 }
 
-function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig[] {
+export function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig[] {
 	const agents: AgentConfig[] = [];
 
 	if (!fs.existsSync(dir)) {
@@ -36,7 +37,8 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 	let entries: fs.Dirent[];
 	try {
 		entries = fs.readdirSync(dir, { withFileTypes: true });
-	} catch {
+	} catch (err) {
+		log.warn(`Failed to read agents directory: ${dir} — ${err instanceof Error ? err.message : err}`);
 		return agents;
 	}
 
@@ -48,7 +50,8 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 		let content: string;
 		try {
 			content = fs.readFileSync(filePath, "utf-8");
-		} catch {
+		} catch (err) {
+			log.warn(`Failed to read agent file: ${filePath} — ${err instanceof Error ? err.message : err}`);
 			continue;
 		}
 
@@ -85,7 +88,8 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 function isDirectory(p: string): boolean {
 	try {
 		return fs.statSync(p).isDirectory();
-	} catch {
+	} catch (err) {
+		log.debug(`stat failed for ${p}: ${err instanceof Error ? err.message : err}`);
 		return false;
 	}
 }

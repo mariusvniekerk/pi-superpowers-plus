@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { log } from "./logging.js";
 
 function isTestPath(p: string): boolean {
   return (
@@ -32,8 +33,8 @@ export default function (pi: ExtensionAPI) {
     if (!violationsFile) return;
     try {
       fs.writeFileSync(violationsFile, String(violations), "utf-8");
-    } catch {
-      // ignore
+    } catch (err) {
+      log.debug(`Failed to persist TDD violations to ${violationsFile}: ${err instanceof Error ? err.message : err}`);
     }
   }
 

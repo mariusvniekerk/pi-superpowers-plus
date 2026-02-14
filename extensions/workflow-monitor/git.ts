@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { log } from "../logging.js";
 
 /**
  * Returns the current git branch name, or (if detached) the short HEAD SHA.
@@ -23,7 +24,10 @@ export function getCurrentGitRef(cwd: string = process.cwd()): string | null {
       .trim();
 
     return sha || null;
-  } catch {
+  } catch (err) {
+    log.warn(
+      `Failed to determine git ref in ${cwd}: ${err instanceof Error ? err.message : err}`,
+    );
     return null;
   }
 }

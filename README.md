@@ -352,6 +352,7 @@ pi-superpowers-plus/
 │   ├── code-reviewer.md               # Production readiness reviewer
 │   └── spec-reviewer.md               # Plan/spec compliance reviewer
 ├── extensions/
+│   ├── logging.ts                     # File-based diagnostic logger (10KB truncation, time-based rotation)
 │   ├── plan-tracker.ts                # Task tracking tool + TUI widget
 │   ├── tdd-guard.ts                   # TDD enforcement for subagents
 │   ├── workflow-monitor.ts            # Extension entry point (event wiring)
@@ -385,7 +386,7 @@ pi-superpowers-plus/
 │   ├── dispatching-parallel-agents/
 │   ├── using-git-worktrees/
 │   └── finishing-a-development-branch/
-└── tests/                            # 251 tests across 29 files
+└── tests/                            # 274 tests across 35 files
 ```
 
 ## Development

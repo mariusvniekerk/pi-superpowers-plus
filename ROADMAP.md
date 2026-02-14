@@ -36,6 +36,19 @@ Then sweep every `catch` block in the codebase. Classify each as ignore / log-an
 
 Single task: build the logger, then fix error handling in one pass through the code.
 
+#### Code Review Notes
+
+Minor items identified across all reviews (none blocking, candidates for follow-up):
+
+1. **Only one generation of rotated logs** — Only keeps `.1` file; older logs are overwritten on each rotation. Consider multi-generation rotation (`.1`, `.2`, `.3`) if historical logs prove valuable.
+2. **Logger initialized eagerly at module load** — Singleton created on import, creates log directory even if logging never happens. Consider lazy initialization.
+3. **Permission tests may be platform-specific** — `chmod` tests in `agents-error-handling.test.ts` won't work on Windows. Add `test.skipIf(process.platform === 'win32')` if Windows CI is ever added.
+4. **Logger's own catch blocks lack error detail** — `write()` and `rotateIfNeeded()` silently swallow errors. Consider a one-time stderr fallback so broken logging is at least minimally visible.
+5. **No crash-safety test** — No test verifies the "logger must never crash the application" contract. Add a test that mocks `fs.appendFileSync` to throw and asserts no exception escapes.
+6. **Log file permissions could be more restrictive** — Created with umask-based `0644` (world-readable). Consider `0o600` for defense in depth on shared systems.
+7. **Duplicated logger mock setup across test files** — Three error-handling test files repeat the same mock pattern. Could extract to a shared test utility.
+8. **Unrelated `.gitignore` change** — `.kotadb/` was added in the logging branch. Cosmetic, noted for git history hygiene.
+
 ### CI Pipeline
 
 **[infra]** GitHub Actions with three concerns:

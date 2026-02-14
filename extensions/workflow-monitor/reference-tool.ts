@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { log } from "../logging.js";
 
 // extensions/workflow-monitor/reference-tool.ts is 2 levels below package root
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -28,7 +29,8 @@ export async function loadReference(topic: string): Promise<string> {
 
   try {
     return await readFile(fullPath, "utf-8");
-  } catch {
+  } catch (err) {
+    log.warn(`Failed to load reference "${topic}" from ${fullPath}: ${err instanceof Error ? err.message : err}`);
     return `Error loading reference "${topic}": file not found at ${fullPath}`;
   }
 }

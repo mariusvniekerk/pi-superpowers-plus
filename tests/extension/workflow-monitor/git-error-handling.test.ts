@@ -1,0 +1,37 @@
+import { describe, test, expect, vi, beforeEach } from "vitest";
+import * as logging from "../../../extensions/logging.js";
+
+vi.mock("../../../extensions/logging.js", async (importOriginal) => {
+  const actual = (await importOriginal()) as typeof logging;
+  return {
+    ...actual,
+    log: {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+    },
+  };
+});
+
+import { getCurrentGitRef } from "../../../extensions/workflow-monitor/git.js";
+
+describe("git.ts error handling", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test("logs warning and returns null when not in a git repo", () => {
+    const result = getCurrentGitRef("/tmp");
+    expect(result).toBeNull();
+    expect(logging.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining("git"),
+    );
+  });
+
+  test("returns branch name without warning in a real repo", () => {
+    const result = getCurrentGitRef(process.cwd());
+    expect(result).toBeTruthy();
+    expect(logging.log.warn).not.toHaveBeenCalled();
+  });
+});
