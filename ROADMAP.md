@@ -86,11 +86,28 @@ The "safe for strangers to rely on" release. Security fixes, resilient subagent 
 - Cancellation propagation — if the parent session is interrupted, child subagents get cleaned up
 - Cap on concurrent subagents to prevent runaway parallelism
 
-### Session Persistence
+### Session State Persistence
 
-**[user]** File-based state keyed by git branch, stored at `~/.pi/superpowers-plus/<branch>.json`. Persisted state includes: workflow phase, TDD monitor state, debug cycle counts, warning strikes. Rehydrated on `session_start` by reading the current branch's state file.
+**[user]** Three monitors currently use in-memory-only state that resets on session restore, fork, and tree navigation:
 
-State file is cleared when the workflow completes (finish phase) or on explicit reset. This enables cross-session continuity — close your laptop, come back the next day, and the workflow monitor knows where you left off on that branch. Also handles mid-session restarts for free.
+| Component | Lost state | User impact |
+|-----------|-----------|-------------|
+| **TddMonitor** | `phase`, `testFilesWritten`, `sourceFilesWritten`, `redVerificationPending` | TDD cycle resets to idle on `/resume` or `/fork` — loses RED/GREEN tracking mid-session |
+| **DebugMonitor** | `active`, `investigated`, `fixAttempts` | Debug mode resets — loses "fix without investigation" tracking |
+| **VerificationMonitor** | `verified`, `verificationWaived` | Verification status resets — could re-gate a commit that was already verified |
+
+**Fix:** Use pi's recommended `appendEntry` pattern. Persist a combined state snapshot whenever any sub-monitor's state changes. Reconstruct from the last `superpowers_state` entry in `getBranch()` on session events.
+
+```typescript
+pi.appendEntry("superpowers_state", {
+  workflow: tracker.getState(),
+  tdd: tdd.getState(),
+  debug: { active, investigated, fixAttempts },
+  verification: { verified, waived },
+});
+```
+
+Also unify WorkflowTracker — currently uses `appendEntry` with its own entry type while plan-tracker uses tool result `details`. WorkflowTracker should join the combined snapshot since it's driven by observing events, not by producing tool results. Plan-tracker stays on tool result `details` (correct pattern for a tool that owns its results).
 
 ### Error Surfacing Review
 
@@ -123,6 +140,18 @@ The "mature package" release. Fill testing gaps, address known skill blindspots,
 ## Future
 
 Ideas with no timeline. May become milestones, may not.
+
+### `/superpowers` command
+
+**[user]** Unified user command for inspecting and controlling workflow state. Subsumes the existing `/workflow-next` command.
+
+- `/superpowers` — full status dashboard (workflow stage, tasks, TDD phase, debug state)
+- `/superpowers tasks [list|add|remove|complete|reset|rewind]` — manipulate plan-tracker tasks directly
+- `/superpowers stage [show|<phase>|reset]` — view or advance workflow stage (brainstorm → plan → execute → verify → review → finish)
+- `/superpowers reset` — reset all workflow state (stage, monitors, tasks)
+- `/superpowers query "<question>"` — explain current state and why we're here (lower priority; static explanation from audit trail, no LLM call)
+
+### Other ideas
 
 - **[user]** Decision log / session recap — human-readable summary of workflow decisions, usable as a "here's where you left off" on session rejoin
 - **[user]** Higher-level activity audit trail — record of what the workflow monitor decided and why, reviewable as an end-of-process recap
