@@ -62,11 +62,6 @@ export function createLogger(logPath: string, options?: LoggerOptions): Logger {
   }
 
   /**
-   * Rotate the log file if it exceeds maxSizeBytes.
-   * Re-checks at most once per rotationCheckInterval (default 1 hour)
-   * so long-running processes can still rotate without checking on every write.
-   */
-  /**
    * Emit a one-time warning to stderr so the user knows logging is broken.
    * Only fires once per logger instance to avoid spamming.
    */
@@ -79,6 +74,11 @@ export function createLogger(logPath: string, options?: LoggerOptions): Logger {
     );
   }
 
+  /**
+   * Rotate the log file if it exceeds maxSizeBytes.
+   * Re-checks at most once per rotationCheckInterval (default 1 hour)
+   * so long-running processes can still rotate without checking on every write.
+   */
   function rotateIfNeeded(): void {
     const now = Date.now();
     if (now - lastRotationCheck < rotationCheckInterval) return;

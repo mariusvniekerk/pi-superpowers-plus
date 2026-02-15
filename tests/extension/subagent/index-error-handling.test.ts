@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import * as fs from "node:fs";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-
+import { createMockLogger } from "../../helpers/mock-logger.js";
 import * as logging from "../../../extensions/logging.js";
 
 const { spawnMock, discoverAgentsMock, unlinkSyncMock, rmSyncMock } = vi.hoisted(() => ({
@@ -32,15 +32,7 @@ vi.mock("../../../extensions/subagent/agents.js", () => ({
 
 vi.mock("../../../extensions/logging.js", async (importOriginal) => {
   const actual = (await importOriginal()) as typeof logging;
-  return {
-    ...actual,
-    log: {
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-    },
-  };
+  return { ...actual, log: createMockLogger() };
 });
 
 import subagentExtension from "../../../extensions/subagent/index";

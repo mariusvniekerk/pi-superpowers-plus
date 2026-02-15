@@ -1,17 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { createMockLogger } from "../../helpers/mock-logger.js";
 import * as logging from "../../../extensions/logging.js";
 
 vi.mock("../../../extensions/logging.js", async (importOriginal) => {
   const actual = (await importOriginal()) as typeof logging;
-  return {
-    ...actual,
-    log: {
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-    },
-  };
+  return { ...actual, log: createMockLogger() };
 });
 
 import { getCurrentGitRef } from "../../../extensions/workflow-monitor/git.js";

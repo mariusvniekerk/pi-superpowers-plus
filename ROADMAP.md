@@ -43,19 +43,19 @@ The "safe for strangers to rely on" release. Security fixes, resilient subagent 
 
 **[maintainer]** ~~Fix the ~166 biome warnings remaining after the initial format pass.~~ Done in cleanup sprint — 0 warnings remaining. Auto-fixed template literals/assertions, suppressed `noExplicitAny` at SDK boundaries, added biome.json test overrides.
 
-### Code Review Debt
+### Code Review Debt ✅
 
-**[maintainer]** Outstanding review items from v0.2.0 branches. Three sources:
+**[maintainer]** ~~Outstanding review items from v0.2.0 branches.~~ All 10 items resolved.
 
 **From logging review** (`docs/plans/logging-review-fixes.md`):
-1. Replace brittle source-inspection tests with behavioral tests (3 test files read source and check for string patterns instead of mocking + asserting)
-2. Fix log rotation for long-running processes (replace `rotatedThisSession` boolean with time-based check)
-3. Add message truncation (10KB cap) and document sync I/O choice
+1. ~~Replace brittle source-inspection tests with behavioral tests~~ ✅ Done — tests already use mocks + behavioral assertions
+2. ~~Fix log rotation for long-running processes~~ ✅ Done — time-based `lastRotationCheck` with configurable `rotationCheckInterval`
+3. ~~Add message truncation (10KB cap) and document sync I/O choice~~ ✅ Done — `truncateMessage()`, `MAX_MESSAGE_LENGTH`, JSDoc on `write()`
 
-**From logging code review notes** (ROADMAP v0.2.0 section):
-4. Logger's own catch blocks lack error detail — add one-time stderr fallback
-5. No crash-safety test for the logger
-6. Duplicated logger mock setup across 3 test files — extract to shared utility
+**From logging code review notes**:
+4. ~~Logger's own catch blocks lack error detail~~ ✅ Fixed — one-time stderr fallback via `stderrFallback()`, fires once then silences
+5. ~~No crash-safety test for the logger~~ ✅ Fixed — 5 new tests in `logging-error-handling.test.ts`
+6. ~~Duplicated logger mock setup across test files~~ ✅ Fixed — extracted `createMockLogger()` to `tests/helpers/mock-logger.ts`
 
 **From phase 2 code review** (`docs/plans/2026-02-10-phase2-code-review-findings.md`):
 7. ~~TDD `source-during-red` false-positives during legitimate RED→GREEN work~~ ✅ Fixed — added `red-pending` phase to distinguish "test written but not run" from "tests failing"
