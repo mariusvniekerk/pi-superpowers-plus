@@ -38,7 +38,7 @@ describe("WorkflowHandler", () => {
 
   test("handles bash test command result", () => {
     handler.handleToolCall("write", { path: "src/utils.test.ts", content: "test" });
-    expect(handler.getTddPhase()).toBe("red");
+    expect(handler.getTddPhase()).toBe("red-pending");
 
     handler.handleBashResult("npx vitest run", "Tests  1 passed", 0);
     expect(handler.getTddPhase()).toBe("green");
@@ -132,9 +132,9 @@ describe("WorkflowHandler", () => {
     handler.handleToolCall("write", { path: "src/utils.test.ts", content: "test" });
     handler.handleBashResult("npx vitest run", "1 failing", 1); // excluded RED verification
     handler.handleBashResult("npx vitest run", "1 failing", 1); // streak 1
-    handler.handleBashResult("npx vitest run", "1 failing", 1); // streak 2 -> active
+    handler.handleBashResult("npx vitest run", "1 failing", 1); // streak 2, but TDD active
     expect(handler.getTddPhase()).toBe("red");
-    expect(handler.isDebugActive()).toBe(true);
+    expect(handler.isDebugActive()).toBe(false);
 
     handler.resetState();
 
@@ -155,7 +155,7 @@ describe("WorkflowHandler", () => {
     test("returns violation on git commit without verification", () => {
       const result = handler.checkCommitGate("git commit -m 'feat'");
       expect(result).not.toBeNull();
-      expect(result!.type).toBe("commit-without-verification");
+      expect(result?.type).toBe("commit-without-verification");
     });
 
     test("returns null on git commit after passing test run", () => {
@@ -168,21 +168,21 @@ describe("WorkflowHandler", () => {
       handler.handleBashResult("npx vitest run", "1 failing", 1);
       const result = handler.checkCommitGate("git commit -m 'feat'");
       expect(result).not.toBeNull();
-      expect(result!.type).toBe("commit-without-verification");
+      expect(result?.type).toBe("commit-without-verification");
     });
 
     test("returns violation on git push after failing test run", () => {
       handler.handleBashResult("npx vitest run", "1 failing", 1);
       const result = handler.checkCommitGate("git push origin main");
       expect(result).not.toBeNull();
-      expect(result!.type).toBe("push-without-verification");
+      expect(result?.type).toBe("push-without-verification");
     });
 
     test("returns violation on PR creation after failing test run", () => {
       handler.handleBashResult("npx vitest run", "1 failing", 1);
       const result = handler.checkCommitGate("gh pr create --title 'feat'");
       expect(result).not.toBeNull();
-      expect(result!.type).toBe("pr-without-verification");
+      expect(result?.type).toBe("pr-without-verification");
     });
 
     test("invalidates previous verification after a later failing test run", () => {
@@ -192,7 +192,7 @@ describe("WorkflowHandler", () => {
       handler.handleBashResult("npx vitest run", "1 failing", 1);
       const result = handler.checkCommitGate("git commit -m 'feat'");
       expect(result).not.toBeNull();
-      expect(result!.type).toBe("commit-without-verification");
+      expect(result?.type).toBe("commit-without-verification");
     });
 
     test("invalidates verification after source write", () => {
@@ -264,7 +264,7 @@ describe("WorkflowHandler (debug threshold + TDD exclusion)", () => {
     expect(handler.isDebugActive()).toBe(false);
   });
 
-  test("TDD exclusion: first failing run after writing a test does not contribute to debug activation", () => {
+  test("TDD exclusion: failing runs during active TDD do not activate debug", () => {
     const handler = createWorkflowHandler();
 
     handler.handleToolCall("write", { path: "tests/new-behavior.test.ts" });
@@ -276,6 +276,28 @@ describe("WorkflowHandler (debug threshold + TDD exclusion)", () => {
     expect(handler.isDebugActive()).toBe(false);
 
     handler.handleBashResult("npx vitest run", failOutput(), 1);
+    expect(handler.isDebugActive()).toBe(false);
+  });
+});
+
+describe("DebugMonitor defers to TDD", () => {
+  test("debug monitor does not activate on test failure when TDD is active", () => {
+    const handler = createWorkflowHandler();
+
+    handler.handleToolCall("write", { path: "tests/foo.test.ts" });
+    handler.handleBashResult("npx vitest run", "FAIL tests/foo.test.ts", 1);
+    handler.handleBashResult("npx vitest run", "FAIL tests/foo.test.ts", 1);
+    handler.handleBashResult("npx vitest run", "FAIL tests/foo.test.ts", 1);
+
+    expect(handler.isDebugActive()).toBe(false);
+  });
+
+  test("debug monitor activates on test failure when TDD is idle", () => {
+    const handler = createWorkflowHandler();
+
+    handler.handleBashResult("npx vitest run", "FAIL tests/foo.test.ts", 1);
+    handler.handleBashResult("npx vitest run", "FAIL tests/foo.test.ts", 1);
+
     expect(handler.isDebugActive()).toBe(true);
   });
 });

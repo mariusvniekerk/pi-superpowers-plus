@@ -1,6 +1,6 @@
 import { isSourceFile, isTestFile } from "./heuristics";
 
-export type TddPhase = "idle" | "red" | "green" | "refactor";
+export type TddPhase = "idle" | "red-pending" | "red" | "green" | "refactor";
 
 export interface TddViolation {
   type: "source-before-test" | "source-during-red";
@@ -18,13 +18,13 @@ export class TddMonitor {
   }
 
   isRedVerificationPending(): boolean {
-    return this.phase === "red" && this.redVerificationPending;
+    return this.phase === "red-pending" && this.redVerificationPending;
   }
 
   onFileWritten(path: string): TddViolation | null {
     if (isTestFile(path)) {
       this.testFilesWritten.add(path);
-      this.phase = "red";
+      this.phase = "red-pending";
       this.redVerificationPending = true;
       return null;
     }
@@ -36,13 +36,14 @@ export class TddMonitor {
         return { type: "source-before-test", file: path };
       }
 
-      if (this.phase === "red" && this.redVerificationPending) {
+      if (this.phase === "red-pending") {
         return { type: "source-during-red", file: path };
       }
 
       if (this.phase === "green") {
         this.phase = "refactor";
       }
+      // red phase: source edits allowed (making the failing test pass), stay in red
       return null;
     }
 
@@ -50,8 +51,14 @@ export class TddMonitor {
   }
 
   onTestResult(passed: boolean): void {
-    if (this.phase === "red") {
+    if (this.phase === "red-pending") {
       this.redVerificationPending = false;
+      if (passed) {
+        this.phase = "green";
+      } else {
+        this.phase = "red";
+      }
+      return;
     }
 
     if (passed && (this.phase === "red" || this.phase === "refactor")) {

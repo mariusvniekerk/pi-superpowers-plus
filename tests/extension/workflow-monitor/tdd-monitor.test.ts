@@ -12,9 +12,9 @@ describe("TddMonitor", () => {
     expect(monitor.getPhase()).toBe("idle");
   });
 
-  test("transitions to red when test file is written", () => {
+  test("transitions to red-pending when test file is written", () => {
     monitor.onFileWritten("src/utils.test.ts");
-    expect(monitor.getPhase()).toBe("red");
+    expect(monitor.getPhase()).toBe("red-pending");
   });
 
   test("stays idle when source file is written (no test context)", () => {
@@ -40,16 +40,16 @@ describe("TddMonitor", () => {
     expect(violation).toBeNull();
   });
 
-  test("returns source-during-red violation when source written in red phase", () => {
-    monitor.onFileWritten("src/utils.test.ts"); // → RED
+  test("returns source-during-red violation when source written in red-pending phase", () => {
+    monitor.onFileWritten("src/utils.test.ts"); // → red-pending
     const violation = monitor.onFileWritten("src/utils.ts");
     expect(violation).not.toBeNull();
     expect(violation?.type).toBe("source-during-red");
   });
 
-  test("transitions to green when tests pass after red", () => {
+  test("transitions to green when tests pass after red-pending", () => {
     monitor.onFileWritten("src/utils.test.ts");
-    expect(monitor.getPhase()).toBe("red");
+    expect(monitor.getPhase()).toBe("red-pending");
     monitor.onTestResult(true);
     expect(monitor.getPhase()).toBe("green");
   });
@@ -95,6 +95,60 @@ describe("TddMonitor", () => {
   });
 });
 
+describe("TddMonitor (red-pending phase)", () => {
+  let tdd: TddMonitor;
+
+  beforeEach(() => {
+    tdd = new TddMonitor();
+  });
+
+  test("transitions to red-pending (not red) when test file is written", () => {
+    tdd.onFileWritten("src/utils.test.ts");
+    expect(tdd.getPhase()).toBe("red-pending");
+  });
+
+  test("transitions from red-pending to red on first test run (fail)", () => {
+    tdd.onFileWritten("src/utils.test.ts");
+    tdd.onTestResult(false);
+    expect(tdd.getPhase()).toBe("red");
+  });
+
+  test("transitions from red-pending to green on first test run (pass)", () => {
+    tdd.onFileWritten("src/utils.test.ts");
+    tdd.onTestResult(true);
+    expect(tdd.getPhase()).toBe("green");
+  });
+
+  test("source edit in red-pending returns source-during-red violation", () => {
+    tdd.onFileWritten("src/utils.test.ts");
+    const violation = tdd.onFileWritten("src/utils.ts");
+    expect(violation?.type).toBe("source-during-red");
+  });
+
+  test("source edit in red (after test run) is allowed", () => {
+    tdd.onFileWritten("src/utils.test.ts");
+    tdd.onTestResult(false);
+    const violation = tdd.onFileWritten("src/utils.ts");
+    expect(violation).toBeNull();
+  });
+
+  test("source edit in red stays in red", () => {
+    tdd.onFileWritten("src/utils.test.ts");
+    tdd.onTestResult(false);
+    tdd.onFileWritten("src/utils.ts");
+    expect(tdd.getPhase()).toBe("red");
+  });
+
+  test("new test file during red re-enters red-pending", () => {
+    tdd.onFileWritten("tests/first.test.ts");
+    tdd.onTestResult(false);
+    tdd.onFileWritten("tests/second.test.ts");
+    expect(tdd.getPhase()).toBe("red-pending");
+    const violation = tdd.onFileWritten("src/utils.ts");
+    expect(violation?.type).toBe("source-during-red");
+  });
+});
+
 describe("TddMonitor (RED verification semantics)", () => {
   let tdd: TddMonitor;
 
@@ -125,7 +179,7 @@ describe("TddMonitor (RED verification semantics)", () => {
     expect(tdd.getPhase()).toBe("green");
 
     expect(tdd.onFileWritten("tests/second.test.ts")).toBeNull();
-    expect(tdd.getPhase()).toBe("red");
+    expect(tdd.getPhase()).toBe("red-pending");
 
     const violation = tdd.onFileWritten("extensions/workflow-monitor/foo.ts");
     expect(violation?.type).toBe("source-during-red");

@@ -1,7 +1,7 @@
 import type { SessionEntry } from "@mariozechner/pi-coding-agent";
 import { DebugMonitor, type DebugViolation } from "./debug-monitor";
 import { isSourceFile } from "./heuristics";
-import { isInvestigationCommand } from "./investigation";
+import { isInvestigationCommand, isInvestigationToolCall } from "./investigation";
 import { TddMonitor, type TddPhase, type TddViolation } from "./tdd-monitor";
 import { parseTestCommand, parseTestResult } from "./test-runner";
 import { VerificationMonitor, type VerificationViolation } from "./verification-monitor";
@@ -14,9 +14,10 @@ export interface ToolCallResult {
 }
 
 export interface WorkflowHandler {
-  handleToolCall(toolName: string, input: Record<string, any>): ToolCallResult;
+  handleToolCall(toolName: string, input: Record<string, unknown>): ToolCallResult;
   handleReadOrInvestigation(toolName: string, path: string): void;
   handleBashResult(command: string, output: string, exitCode: number | undefined): void;
+  /** @internal Used in tests; will be wired to bash events in future */
   handleBashInvestigation(command: string): void;
   isDebugActive(): boolean;
   getDebugFixAttempts(): number;
@@ -28,7 +29,7 @@ export interface WorkflowHandler {
   restoreTddState(phase: TddPhase, testFiles: string[], sourceFiles: string[], redVerificationPending?: boolean): void;
   handleInputText(text: string): boolean;
   handleFileWritten(path: string): boolean;
-  handlePlanTrackerToolCall(input: Record<string, any>): boolean;
+  handlePlanTrackerToolCall(input: Record<string, unknown>): boolean;
   getWorkflowState(): WorkflowTrackerState | null;
   restoreWorkflowStateFromBranch(branch: SessionEntry[]): void;
   markWorkflowPrompted(phase: Phase): boolean;
@@ -46,7 +47,12 @@ export function createWorkflowHandler(): WorkflowHandler {
   let debugFailStreak = 0;
 
   return {
-    handleToolCall(toolName: string, input: Record<string, any>): ToolCallResult {
+    handleToolCall(toolName: string, input: Record<string, unknown>): ToolCallResult {
+      // Track investigation from tool calls (LSP, kota, web search)
+      if (isInvestigationToolCall(toolName, input)) {
+        debug.onInvestigation();
+      }
+
       if (toolName === "write" || toolName === "edit") {
         const path = input.path as string | undefined;
         if (path) {
@@ -95,7 +101,7 @@ export function createWorkflowHandler(): WorkflowHandler {
             verification.reset();
           }
 
-          const excludeFromDebug = !passed && tdd.getPhase() === "red" && tdd.isRedVerificationPending();
+          const excludeFromDebug = !passed && tdd.getPhase() === "red-pending";
 
           tdd.onTestResult(passed);
 
@@ -104,7 +110,8 @@ export function createWorkflowHandler(): WorkflowHandler {
             debug.onTestPassed();
           } else if (!excludeFromDebug) {
             debugFailStreak += 1;
-            if (debugFailStreak >= 2) {
+            const tddPhase = tdd.getPhase();
+            if (debugFailStreak >= 2 && tddPhase === "idle") {
               debug.onTestFailed();
             }
           }
@@ -169,7 +176,7 @@ export function createWorkflowHandler(): WorkflowHandler {
       return tracker.onFileWritten(path);
     },
 
-    handlePlanTrackerToolCall(input: Record<string, any>) {
+    handlePlanTrackerToolCall(input: Record<string, unknown>) {
       if (input.action === "init") {
         return tracker.onPlanTrackerInit();
       }

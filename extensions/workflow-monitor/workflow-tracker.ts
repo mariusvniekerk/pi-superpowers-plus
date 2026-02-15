@@ -185,7 +185,9 @@ export class WorkflowTracker {
 
     for (const entry of branch) {
       if (entry.type !== "custom") continue;
+      // biome-ignore lint/suspicious/noExplicitAny: pi SDK session entry type
       if ((entry as any).customType !== WORKFLOW_TRACKER_ENTRY_TYPE) continue;
+      // biome-ignore lint/suspicious/noExplicitAny: pi SDK session entry type
       const data = (entry as any).data as WorkflowTrackerState | undefined;
       if (data && typeof data === "object") {
         last = cloneState(data);

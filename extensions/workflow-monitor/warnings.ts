@@ -21,13 +21,13 @@ Delete the production code. Write the test. Watch it fail. Then implement.
 
   if (type === "source-during-red") {
     return `
-⚠️ TDD VIOLATION: You wrote production code (${file}) during RED phase.
+⚠️ TDD VIOLATION: You wrote production code (${file}) during RED-PENDING phase.
 
-You wrote a test but haven't run it yet. Run your failing test first.
+Run your new test before editing source code.
 
 The TDD cycle: Write test → Run it (RED) → Write code → Run it (GREEN)
 
-You're in RED. Run the test. Watch it fail. THEN write the production code.
+You wrote a test but haven't run it yet. Run the test suite now. Watch the new test fail. THEN write the production code.
 `.trim();
   }
 
@@ -61,9 +61,9 @@ Stop. Read. Understand. Then fix.
 
   if (type === "excessive-fix-attempts") {
     return `
-⚠️ DEBUG WARNING: This is fix attempt #${fixAttempts} for ${file}. Previous attempts failed.
+⚠️ DEBUG WARNING: ${fixAttempts} failed fix attempts on ${file}.
 
-When 3+ fixes fail, this is NOT a failed hypothesis — it's a wrong architecture.
+${fixAttempts} fix attempts haven't resolved the issue. Consider stepping back to investigate root cause.
 
 Pattern indicating architectural problem:
 - Each fix reveals new problems in different places

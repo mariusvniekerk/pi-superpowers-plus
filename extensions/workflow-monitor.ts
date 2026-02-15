@@ -274,6 +274,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   // --- Completion action gate prompt ---
+  // biome-ignore lint/suspicious/noExplicitAny: pi SDK context type
   async function promptCompletionGate(unresolved: Phase[], ctx: any): Promise<"allowed" | "blocked"> {
     if (unresolved.length === 1) {
       const missing = unresolved[0];
@@ -370,6 +371,7 @@ export default function (pi: ExtensionAPI) {
     const toolCallId = event.toolCallId;
 
     if (event.toolName === "bash") {
+      // biome-ignore lint/suspicious/noExplicitAny: pi SDK event input type
       const command = ((event.input as Record<string, any>).command as string | undefined) ?? "";
 
       const state = handler.getWorkflowState();
@@ -401,6 +403,7 @@ export default function (pi: ExtensionAPI) {
       }
     }
 
+    // biome-ignore lint/suspicious/noExplicitAny: pi SDK event input type
     const input = event.input as Record<string, any>;
     const result = handler.handleToolCall(event.toolName, input);
     if (result.violation) {
@@ -484,6 +487,7 @@ export default function (pi: ExtensionAPI) {
 
     // Handle read tool as investigation signal
     if (event.toolName === "read") {
+      // biome-ignore lint/suspicious/noExplicitAny: pi SDK event input type
       const path = ((event.input as Record<string, any>).path as string) ?? "";
       handler.handleReadOrInvestigation("read", path);
     }
@@ -518,11 +522,13 @@ export default function (pi: ExtensionAPI) {
 
     // Handle bash results (test runs, commits, investigation)
     if (event.toolName === "bash") {
+      // biome-ignore lint/suspicious/noExplicitAny: pi SDK event input type
       const command = ((event.input as Record<string, any>).command as string) ?? "";
       const output = event.content
         .filter((c): c is { type: "text"; text: string } => c.type === "text")
         .map((c) => c.text)
         .join("\n");
+      // biome-ignore lint/suspicious/noExplicitAny: pi SDK event details type
       const exitCode = (event.details as any)?.exitCode as number | undefined;
       handler.handleBashResult(command, output, exitCode);
 
@@ -632,6 +638,7 @@ export default function (pi: ExtensionAPI) {
     );
   }
 
+  // biome-ignore lint/suspicious/noExplicitAny: pi SDK theme type
   function formatPhaseStrip(state: WorkflowTrackerState | null, theme: any): string {
     if (!state?.currentPhase) return "";
 
@@ -670,6 +677,7 @@ export default function (pi: ExtensionAPI) {
       // TDD phase
       if (tddPhase !== "IDLE") {
         const colorMap: Record<string, string> = {
+          "RED-PENDING": "error",
           RED: "error",
           GREEN: "success",
           REFACTOR: "accent",
@@ -758,6 +766,7 @@ export default function (pi: ExtensionAPI) {
       return new Text(text, 0, 0);
     },
     renderResult(result, _options, theme) {
+      // biome-ignore lint/suspicious/noExplicitAny: pi SDK event details type
       const topic = (result.details as any)?.topic ?? "unknown";
       const content = result.content[0];
       const len = content?.type === "text" ? content.text.length : 0;

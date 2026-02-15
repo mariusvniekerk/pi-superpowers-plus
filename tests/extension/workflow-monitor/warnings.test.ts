@@ -22,8 +22,13 @@ describe("getTddViolationWarning", () => {
 
   test("returns source-during-red warning", () => {
     const warning = getTddViolationWarning("source-during-red", "src/utils.ts");
-    expect(warning).toContain("RED phase");
-    expect(warning).toContain("Run your failing test");
+    expect(warning).toContain("RED-PENDING phase");
+    expect(warning).toContain("Run the test suite now");
+  });
+
+  test("source-during-red warning mentions running the test first", () => {
+    const warning = getTddViolationWarning("source-during-red", "src/foo.ts");
+    expect(warning).toContain("Run your new test before editing source code");
   });
 
   test("warning is concise (under 15 lines)", () => {
@@ -43,14 +48,20 @@ describe("getDebugViolationWarning", () => {
 
   test("returns excessive-fix-attempts warning with count", () => {
     const warning = getDebugViolationWarning("excessive-fix-attempts", "src/foo.ts", 3);
-    expect(warning).toContain("fix attempt #3");
+    expect(warning).toContain("3 failed fix attempts");
     expect(warning).toContain("architecture");
     expect(warning).toContain("human partner");
   });
 
   test("returns excessive-fix-attempts warning with higher count", () => {
     const warning = getDebugViolationWarning("excessive-fix-attempts", "src/foo.ts", 5);
-    expect(warning).toContain("fix attempt #5");
+    expect(warning).toContain("5 failed fix attempts");
+  });
+
+  test("excessive-fix-attempts warning shows correct attempt count", () => {
+    const warning = getDebugViolationWarning("excessive-fix-attempts", "src/foo.ts", 3);
+    expect(warning).toContain("3 failed fix attempts");
+    expect(warning).not.toContain("fix attempt #3");
   });
 });
 

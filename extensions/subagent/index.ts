@@ -65,6 +65,7 @@ function formatUsageStats(
 function formatToolCall(
   toolName: string,
   args: Record<string, unknown>,
+  // biome-ignore lint/suspicious/noExplicitAny: pi SDK theme callback type
   themeFg: (color: any, text: string) => string,
 ): string {
   const shortenPath = (p: string) => {
@@ -172,6 +173,7 @@ function getFinalOutput(messages: Message[]): string {
   return "";
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: pi SDK message content type
 type DisplayItem = { type: "text"; text: string } | { type: "toolCall"; name: string; args: Record<string, any> };
 
 function getDisplayItems(messages: Message[]): DisplayItem[] {
@@ -205,10 +207,13 @@ function collectSummary(messages: Message[]): { filesChanged: string[]; testsRan
     if (msg.role !== "assistant") continue;
     for (const part of msg.content) {
       if (part.type !== "toolCall") continue;
+      // biome-ignore lint/suspicious/noExplicitAny: pi SDK message content type
       if ((part.name === "write" || part.name === "edit") && typeof (part.arguments as any)?.path === "string") {
+        // biome-ignore lint/suspicious/noExplicitAny: pi SDK message content type
         files.add((part.arguments as any).path);
       }
       if (part.name === "bash") {
+        // biome-ignore lint/suspicious/noExplicitAny: pi SDK message content type
         const cmd = (part.arguments as any)?.command;
         if (typeof cmd === "string" && isTestCommand(cmd)) testsRan = true;
       }
@@ -334,10 +339,11 @@ async function runSingleAgent(
 
       const processLine = (line: string) => {
         if (!line.trim()) return;
+        // biome-ignore lint/suspicious/noExplicitAny: pi SDK JSON event type
         let event: any;
         try {
           event = JSON.parse(line);
-        } catch (err) {
+        } catch (_err) {
           log.debug(`Ignoring non-JSON line from subagent stdout: ${line.slice(0, 120)}`);
           return;
         }

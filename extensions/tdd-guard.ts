@@ -40,6 +40,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("tool_call", async (event) => {
     if (event.toolName === "bash") {
+      // biome-ignore lint/suspicious/noExplicitAny: pi SDK event type
       const command = (event.input as any)?.command as string | undefined;
       if (command && isTestCommand(command) && event.toolCallId) {
         pendingTestCommands.add(event.toolCallId);
@@ -48,6 +49,7 @@ export default function (pi: ExtensionAPI) {
     }
 
     if (event.toolName === "write" || event.toolName === "edit") {
+      // biome-ignore lint/suspicious/noExplicitAny: pi SDK event type
       const p = ((event.input as any)?.path as string | undefined) ?? "";
       if (!p) return;
 
@@ -72,6 +74,7 @@ export default function (pi: ExtensionAPI) {
     if (!event.toolCallId || !pendingTestCommands.has(event.toolCallId)) return;
 
     pendingTestCommands.delete(event.toolCallId);
+    // biome-ignore lint/suspicious/noExplicitAny: pi SDK event details type
     const exitCode = (event.details as any)?.exitCode;
     const passed = typeof exitCode === "number" ? exitCode === 0 : event.isError !== true;
 
