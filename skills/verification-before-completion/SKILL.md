@@ -92,3 +92,5 @@ Skip any step = lying, not verifying
 ## Enforcement
 
 The workflow-monitor extension gates `git commit`, `git push`, and `gh pr create`. If you haven't run a passing test suite since your last source file edit, the command gets a warning injected into its tool result. The gate clears automatically after a fresh passing test run.
+
+When all verification passes, mark the verify phase complete: call `plan_tracker` with `{action: "update", status: "complete"}` for the current phase.

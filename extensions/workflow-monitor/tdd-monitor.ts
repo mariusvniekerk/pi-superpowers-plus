@@ -1,4 +1,5 @@
-import { isSourceFile, isTestFile } from "./heuristics";
+import fs from "node:fs";
+import { findCorrespondingTestFile, isSourceFile, isTestFile } from "./heuristics";
 
 export type TddPhase = "idle" | "red-pending" | "red" | "green" | "refactor";
 
@@ -12,6 +13,11 @@ export class TddMonitor {
   private testFilesWritten = new Set<string>();
   private sourceFilesWritten = new Set<string>();
   private redVerificationPending = false;
+  private fileExists: (path: string) => boolean;
+
+  constructor(fileExists?: (path: string) => boolean) {
+    this.fileExists = fileExists ?? ((filePath) => fs.existsSync(filePath));
+  }
 
   getPhase(): TddPhase {
     return this.phase;
@@ -33,7 +39,13 @@ export class TddMonitor {
       this.sourceFilesWritten.add(path);
 
       if (this.testFilesWritten.size === 0) {
-        return { type: "source-before-test", file: path };
+        const existingTestFile = findCorrespondingTestFile(path).some((candidatePath) =>
+          this.fileExists(candidatePath),
+        );
+        if (!existingTestFile) {
+          return { type: "source-before-test", file: path };
+        }
+        return null;
       }
 
       if (this.phase === "red-pending") {

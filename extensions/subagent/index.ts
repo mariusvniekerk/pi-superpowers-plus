@@ -28,6 +28,7 @@ import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.js";
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
 const COLLAPSED_ITEM_COUNT = 10;
+export const INACTIVITY_TIMEOUT_MS = 120_000;
 
 function formatTokens(count: number): string {
   if (count < 1000) return count.toString();
@@ -336,6 +337,17 @@ async function runSingleAgent(
         env: { ...process.env, PI_TDD_GUARD_VIOLATIONS_FILE: tddViolationsPath },
       });
       let buffer = "";
+      let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
+      let exitResolved = false;
+
+      const resolveOnce = (code: number) => {
+        if (exitResolved) return;
+        exitResolved = true;
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        resolve(code);
+      };
+
+      let resetInactivityTimer = () => {};
 
       const processLine = (line: string) => {
         if (!line.trim()) return;
@@ -368,6 +380,7 @@ async function runSingleAgent(
             if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
           }
           emitUpdate();
+          resetInactivityTimer();
         }
 
         if (event.type === "tool_result_end" && event.message) {
@@ -375,6 +388,23 @@ async function runSingleAgent(
           emitUpdate();
         }
       };
+
+      resetInactivityTimer = () => {
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        inactivityTimer = setTimeout(() => {
+          if (exitResolved) return;
+          log.debug(`Subagent killed after ${INACTIVITY_TIMEOUT_MS}ms of inactivity`);
+          currentResult.errorMessage = `Subagent killed after ${INACTIVITY_TIMEOUT_MS / 1000}s of inactivity`;
+          if (buffer.trim()) processLine(buffer);
+          proc.kill("SIGTERM");
+          setTimeout(() => {
+            if (!proc.killed) proc.kill("SIGKILL");
+          }, 5000);
+          resolveOnce(1);
+        }, INACTIVITY_TIMEOUT_MS);
+      };
+
+      resetInactivityTimer();
 
       proc.stdout.on("data", (data) => {
         buffer += data.toString();
@@ -387,13 +417,20 @@ async function runSingleAgent(
         currentResult.stderr += data.toString();
       });
 
-      proc.on("close", (code) => {
-        if (buffer.trim()) processLine(buffer);
-        resolve(code ?? 0);
+      proc.on("exit", (code) => {
+        if (exitResolved) return;
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        // Wait for any remaining stdout data to arrive after process exit, then drain.
+        // 2s is generous for local I/O; the process has already exited at this point.
+        setTimeout(() => {
+          if (buffer.trim()) processLine(buffer);
+          resolveOnce(code ?? 0);
+        }, 2000);
       });
 
       proc.on("error", () => {
-        resolve(1);
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        resolveOnce(1);
       });
 
       if (signal) {

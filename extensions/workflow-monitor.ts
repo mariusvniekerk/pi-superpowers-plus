@@ -8,6 +8,7 @@
  * - Register workflow_reference tool for on-demand reference content
  */
 
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { StringEnum } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
@@ -52,9 +53,30 @@ async function selectValue<T extends string>(
 
 const SUPERPOWERS_STATE_ENTRY_TYPE = "superpowers_state";
 
-export function reconstructState(ctx: ExtensionContext, handler: WorkflowHandler) {
+export function getStateFilePath(): string {
+  return path.join(process.cwd(), ".pi", "superpowers-state.json");
+}
+
+export function reconstructState(ctx: ExtensionContext, handler: WorkflowHandler, stateFilePath?: string | false) {
   handler.resetState();
 
+  // Try file-based state first (survives across sessions)
+  // Pass false to disable file-based state (for testing)
+  if (stateFilePath !== false) {
+    try {
+      const statePath = stateFilePath ?? getStateFilePath();
+      if (fs.existsSync(statePath)) {
+        const raw = fs.readFileSync(statePath, "utf-8");
+        const data = JSON.parse(raw);
+        handler.setFullState(data);
+        return;
+      }
+    } catch {
+      // Fall through to session entries
+    }
+  }
+
+  // Fall back to session branch entries
   const entries = ctx.sessionManager.getBranch();
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
@@ -122,6 +144,14 @@ export default function (pi: ExtensionAPI) {
 
   const persistState = () => {
     pi.appendEntry(SUPERPOWERS_STATE_ENTRY_TYPE, handler.getFullState());
+    // Also persist to file for cross-session survival
+    try {
+      const statePath = getStateFilePath();
+      fs.mkdirSync(path.dirname(statePath), { recursive: true });
+      fs.writeFileSync(statePath, JSON.stringify(handler.getFullState(), null, 2));
+    } catch {
+      // Silently fail — session entry is the fallback
+    }
   };
 
   const phaseToSkill: Record<string, string> = {
@@ -652,7 +682,8 @@ export default function (pi: ExtensionAPI) {
   // --- Format violation warning based on type ---
   function formatViolationWarning(violation: Violation): string {
     if (violation.type === "source-before-test" || violation.type === "source-during-red") {
-      return getTddViolationWarning(violation.type, violation.file);
+      const phase = handler.getWorkflowState()?.currentPhase;
+      return getTddViolationWarning(violation.type, violation.file, phase ?? undefined);
     }
     return getDebugViolationWarning(
       violation.type as DebugViolationType,

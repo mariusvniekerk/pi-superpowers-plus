@@ -114,3 +114,5 @@ Otherwise → not TDD
 ```
 
 No exceptions without your human partner's permission.
+
+When the TDD implementation cycle is complete (all tests green, code committed), mark the implement phase complete: call `plan_tracker` with `{action: "update", status: "complete"}` for the current phase.

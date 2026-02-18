@@ -1,7 +1,19 @@
 export type TddViolationType = "source-before-test" | "source-during-red";
 
-export function getTddViolationWarning(type: TddViolationType, file: string): string {
+export function getTddViolationWarning(type: TddViolationType, file: string, phase?: string): string {
   if (type === "source-before-test") {
+    if (phase === "verify" || phase === "review") {
+      return `
+⚠️ TDD VIOLATION: You modified production code (${file}) without a failing test first.
+
+The Iron Law: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.
+
+Add a test for this change before modifying the source.
+
+Run the test. Watch it fail. Then update the production code.
+`.trim();
+    }
+
     return `
 ⚠️ TDD VIOLATION: You wrote production code (${file}) without a failing test first.
 

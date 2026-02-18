@@ -1,3 +1,5 @@
+import path from "node:path";
+
 const TEST_PATTERNS = [
   /\.(test|spec)\.(ts|js|tsx|jsx|py|rs|go|java|rb|swift|kt)$/,
   /(^|\/)tests?\//,
@@ -26,4 +28,31 @@ export function isSourceFile(path: string): boolean {
   if (isTestFile(path)) return false;
   if (CONFIG_PATTERNS.some((p) => p.test(path))) return false;
   return true;
+}
+
+export function findCorrespondingTestFile(filePath: string): string[] {
+  const parsed = path.posix.parse(filePath);
+  const baseDir = parsed.dir;
+  const stem = parsed.name;
+  const ext = parsed.ext;
+
+  if (!stem || !ext) return [];
+
+  const candidates = [
+    path.posix.join(baseDir, `${stem}.test${ext}`),
+    path.posix.join(baseDir, `${stem}.spec${ext}`),
+    path.posix.join(baseDir, "__tests__", `${stem}.test${ext}`),
+    path.posix.join(baseDir, "__tests__", `${stem}.spec${ext}`),
+  ];
+
+  if (filePath.startsWith("src/")) {
+    const relFromSrc = filePath.slice("src/".length);
+    const relParsed = path.posix.parse(relFromSrc);
+    candidates.push(
+      path.posix.join("tests", relParsed.dir, `${relParsed.name}.test${relParsed.ext}`),
+      path.posix.join("tests", relParsed.dir, `${relParsed.name}.spec${relParsed.ext}`),
+    );
+  }
+
+  return candidates;
 }

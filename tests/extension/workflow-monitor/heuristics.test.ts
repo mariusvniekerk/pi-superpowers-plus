@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { isSourceFile, isTestFile } from "../../../extensions/workflow-monitor/heuristics";
+import { findCorrespondingTestFile, isSourceFile, isTestFile } from "../../../extensions/workflow-monitor/heuristics";
 
 describe("isTestFile", () => {
   test("matches .test.ts files", () => {
@@ -44,6 +44,39 @@ describe("isTestFile", () => {
   });
   test("does not match setup.py", () => {
     expect(isTestFile("setup.py")).toBe(false);
+  });
+});
+
+describe("findCorrespondingTestFile", () => {
+  test("returns same-directory and __tests__ candidates", () => {
+    expect(findCorrespondingTestFile("src/utils.ts")).toEqual([
+      "src/utils.test.ts",
+      "src/utils.spec.ts",
+      "src/__tests__/utils.test.ts",
+      "src/__tests__/utils.spec.ts",
+      "tests/utils.test.ts",
+      "tests/utils.spec.ts",
+    ]);
+  });
+
+  test("returns candidates for nested src paths with tests mirror", () => {
+    expect(findCorrespondingTestFile("src/lib/math/add.ts")).toEqual([
+      "src/lib/math/add.test.ts",
+      "src/lib/math/add.spec.ts",
+      "src/lib/math/__tests__/add.test.ts",
+      "src/lib/math/__tests__/add.spec.ts",
+      "tests/lib/math/add.test.ts",
+      "tests/lib/math/add.spec.ts",
+    ]);
+  });
+
+  test("does not include tests/ mirror candidate outside src/", () => {
+    expect(findCorrespondingTestFile("extensions/workflow-monitor/tdd-monitor.ts")).toEqual([
+      "extensions/workflow-monitor/tdd-monitor.test.ts",
+      "extensions/workflow-monitor/tdd-monitor.spec.ts",
+      "extensions/workflow-monitor/__tests__/tdd-monitor.test.ts",
+      "extensions/workflow-monitor/__tests__/tdd-monitor.spec.ts",
+    ]);
   });
 });
 

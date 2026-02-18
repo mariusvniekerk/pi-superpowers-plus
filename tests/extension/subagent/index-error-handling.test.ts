@@ -35,7 +35,7 @@ vi.mock("../../../extensions/logging.js", async (importOriginal) => {
   return { ...actual, log: createMockLogger() };
 });
 
-import subagentExtension from "../../../extensions/subagent/index";
+import subagentExtension, { INACTIVITY_TIMEOUT_MS } from "../../../extensions/subagent/index";
 
 type Handler = (event: any, ctx: any) => any;
 
@@ -85,7 +85,7 @@ describe("subagent/index error handling", () => {
       const proc = createFakeProcess();
       queueMicrotask(() => {
         proc.stdout.emit("data", Buffer.from("not-json\n"));
-        proc.emit("close", 0);
+        proc.emit("exit", 0);
       });
       return proc;
     });
@@ -105,7 +105,7 @@ describe("subagent/index error handling", () => {
     spawnMock.mockImplementation(() => {
       const proc = createFakeProcess();
       queueMicrotask(() => {
-        proc.emit("close", 0);
+        proc.emit("exit", 0);
       });
       return proc;
     });
@@ -127,5 +127,30 @@ describe("subagent/index error handling", () => {
     expect(fs.rmSync).toHaveBeenCalled();
     expect(logging.log.debug).toHaveBeenCalledWith(expect.stringContaining("Failed to clean up temp prompt file"));
     expect(logging.log.debug).toHaveBeenCalledWith(expect.stringContaining("Failed to clean up temp directory"));
+  });
+
+  test("resolves when subagent process exits even if close never fires", async () => {
+    spawnMock.mockImplementation(() => {
+      const proc = createFakeProcess();
+      queueMicrotask(() => {
+        proc.emit("exit", 0);
+      });
+      return proc;
+    });
+
+    const tool = registerTool();
+    await expect(
+      Promise.race([
+        tool.execute("id", { agent: "test-agent", task: "do work" }, undefined, undefined, {
+          cwd: process.cwd(),
+          hasUI: false,
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timed out waiting for execute")), 3000)),
+      ]),
+    ).resolves.toBeDefined();
+  });
+
+  test("exports inactivity timeout constant", () => {
+    expect(INACTIVITY_TIMEOUT_MS).toBe(120_000);
   });
 });

@@ -20,6 +20,23 @@ describe("getTddViolationWarning", () => {
     expect(warning).toContain("I'll test after");
   });
 
+  test("uses gentler wording during verify phase", () => {
+    const warning = getTddViolationWarning("source-before-test", "src/utils.ts", "verify");
+    expect(warning).toContain("Add a test");
+    expect(warning).not.toContain("Delete");
+  });
+
+  test("uses standard wording during implement phase", () => {
+    const warning = getTddViolationWarning("source-before-test", "src/utils.ts", "implement");
+    expect(warning).toContain("Delete");
+    expect(warning).toContain("failing test");
+  });
+
+  test("uses standard wording when no phase provided", () => {
+    const warning = getTddViolationWarning("source-before-test", "src/utils.ts");
+    expect(warning).toContain("Delete");
+  });
+
   test("returns source-during-red warning", () => {
     const warning = getTddViolationWarning("source-during-red", "src/utils.ts");
     expect(warning).toContain("RED-PENDING phase");

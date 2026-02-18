@@ -28,6 +28,23 @@ describe("TddMonitor", () => {
     expect(violation?.type).toBe("source-before-test");
   });
 
+  test("does not warn when corresponding test file already exists on disk", () => {
+    const monitorWithDiskTests = new TddMonitor(
+      (candidatePath) => candidatePath === "src/utils.test.ts" || candidatePath === "tests/utils.test.ts",
+    );
+
+    const violation = monitorWithDiskTests.onFileWritten("src/utils.ts");
+    expect(violation).toBeNull();
+  });
+
+  test("still warns when no corresponding test file exists on disk", () => {
+    const monitorWithoutDiskTests = new TddMonitor(() => false);
+
+    const violation = monitorWithoutDiskTests.onFileWritten("src/utils.ts");
+    expect(violation).not.toBeNull();
+    expect(violation?.type).toBe("source-before-test");
+  });
+
   test("no violation when test file written", () => {
     const violation = monitor.onFileWritten("src/utils.test.ts");
     expect(violation).toBeNull();
