@@ -56,6 +56,8 @@ Assume they are a skilled developer, but know almost nothing about our toolset o
 ```markdown
 ### Task N: [Component Name]
 
+**TDD scenario:** [New feature — full TDD cycle | Modifying tested code — run existing tests first | Trivial change — use judgment]
+
 **Files:**
 - Create: `exact/path/to/file.py`
 - Modify: `exact/path/to/existing.py:123-145`

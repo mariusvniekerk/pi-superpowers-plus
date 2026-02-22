@@ -145,7 +145,8 @@ describe("boundary prompting", () => {
     const latest = fake.appendedEntries.at(-1)?.data;
     expect(latest.workflow.phases.plan).toBe("skipped");
     expect(latest.workflow.currentPhase).toBe("execute");
-    expect(editorTexts.at(-1)).toBe("/skill:executing-plans");
+    // phaseAfterSkip ("execute") === currentPhase ("execute") → same-phase, no editor injection
+    expect(editorTexts.length).toBe(0);
   });
 
   test("skip on terminal next phase marks it skipped without advancing into it", async () => {

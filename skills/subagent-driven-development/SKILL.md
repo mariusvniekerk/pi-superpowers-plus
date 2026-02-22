@@ -255,7 +255,7 @@ Do NOT automatically dispatch final review or start the finishing skill. The use
 - **`/skill:finishing-a-development-branch`** - Complete development after all tasks
 
 **Subagents follow by default:**
-- **TDD** - Failing test first for all production code (enforced by workflow-monitor, instructions in implementer prompt)
+- **TDD** - Runtime warnings on source-before-test patterns. Implementer subagents receive three-scenario TDD instructions via agent profile and prompt template: new feature (full TDD), modifying tested code (run existing tests), trivial change (judgment call).
 
 **Alternative workflow:**
 - **`/skill:executing-plans`** - Use for parallel session instead of same-session execution

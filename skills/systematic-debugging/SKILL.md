@@ -15,7 +15,7 @@ Random fixes waste time and create new bugs. Quick patches mask underlying issue
 
 **Violating the letter of this process is violating the spirit of debugging.**
 
-> The workflow-monitor extension actively tracks your debugging: it detects fix-without-investigation and counts failed fix attempts. Use `workflow_reference` with debug topics for detailed guidance.
+> The workflow-monitor extension tracks your debugging: it detects fix-without-investigation and counts failed fix attempts, surfacing warnings in tool results. Use `workflow_reference` with debug topics for additional guidance.
 
 If a tool result contains a ⚠️ workflow warning, stop immediately and address it before continuing.
 
@@ -57,6 +57,23 @@ You MUST complete each phase before proceeding to the next.
 3. **Check Recent Changes** — Git diff, recent commits, new dependencies, config changes, environmental differences.
 
 4. **Gather Evidence in Multi-Component Systems** — For each component boundary: log what enters, what exits, verify config propagation. Run once to see WHERE it breaks, then investigate that component.
+
+   **Example (multi-layer system):**
+   ```bash
+   # Layer 1: Workflow
+   echo "=== Secrets available: ==="
+   echo "IDENTITY: ${IDENTITY:+SET}${IDENTITY:-UNSET}"
+
+   # Layer 2: Build script
+   echo "=== Env vars in build script: ==="
+   env | grep IDENTITY || echo "IDENTITY not in environment"
+
+   # Layer 3: Signing
+   echo "=== Keychain state: ==="
+   security list-keychains
+   security find-identity -v
+   ```
+   **This reveals:** Which layer fails (e.g., secrets → workflow ✓, workflow → build ✗)
 
 5. **Trace Data Flow** — Where does the bad value originate? What called this with the bad value? Keep tracing up until you find the source. Fix at source, not at symptom. See `root-cause-tracing.md` for the complete technique.
 
@@ -100,6 +117,38 @@ Pattern indicating architectural problem:
 - Should we refactor architecture vs. continue fixing symptoms?
 
 **Discuss with your human partner before attempting more fixes.**
+
+## Red Flags — STOP and Follow Process
+
+If you catch yourself thinking:
+- "Quick fix for now, investigate later"
+- "Just try changing X and see if it works"
+- "Add multiple changes, run tests"
+- "Skip the test, I'll manually verify"
+- "It's probably X, let me fix that"
+- "I don't fully understand but this might work"
+- "Pattern says X but I'll adapt it differently"
+- "Here are the main problems: [lists fixes without investigation]"
+- Proposing solutions before tracing data flow
+- **"One more fix attempt" (when already tried 2+)**
+- **Each fix reveals new problem in different place**
+
+**ALL of these mean: STOP. Return to Phase 1.**
+
+**If 3+ fixes failed:** Question the architecture (see above).
+
+## Common Rationalizations
+
+| Excuse | Reality |
+|--------|---------|
+| "Issue is simple, don't need process" | Simple issues have root causes too. Process is fast for simple bugs. |
+| "Emergency, no time for process" | Systematic debugging is FASTER than guess-and-check thrashing. |
+| "Just try this first, then investigate" | First fix sets the pattern. Do it right from the start. |
+| "I'll write test after confirming fix works" | Untested fixes don't stick. Test first proves it. |
+| "Multiple fixes at once saves time" | Can't isolate what worked. Causes new bugs. |
+| "Reference too long, I'll adapt the pattern" | Partial understanding guarantees bugs. Read it completely. |
+| "I see the problem, let me fix it" | Seeing symptoms ≠ understanding root cause. |
+| "One more fix attempt" (after 2+ failures) | 3+ failures = architectural problem. Question pattern, don't fix again. |
 
 ## When Process Reveals "No Root Cause"
 

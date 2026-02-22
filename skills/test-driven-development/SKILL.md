@@ -15,23 +15,66 @@ Write the test first. Watch it fail. Write minimal code to pass.
 
 **Violating the letter of the rules is violating the spirit of the rules.**
 
-**Active enforcement:** The workflow monitor extension tracks your TDD phase (RED→GREEN→REFACTOR) and will warn if you write production code without a failing test. Use `workflow_reference` to look up rationalizations, examples, and anti-patterns on demand.
-
-If a tool result contains a ⚠️ workflow warning, stop immediately and address it before continuing.
-
 ## Prerequisites
 - Active branch (not main) or user-confirmed intent to work on main
 - Approved plan or clear task scope
 
-## When to Use
+## When to Use — Three Scenarios
 
-**Always:** New features, bug fixes, refactoring, behavior changes.
+Not every change requires the same TDD approach. Determine which scenario applies:
 
-**Exceptions (ask your human partner):** Throwaway prototypes, generated code, configuration files.
+### Scenario 1: New Feature / New File
 
-Thinking "skip TDD just this once"? Stop. That's rationalization.
+Full TDD cycle. No shortcuts.
 
-## The Iron Law
+1. Write a failing test
+2. Watch it fail
+3. Write minimal code to pass
+4. Watch it pass
+5. Refactor
+6. Repeat
+
+**This is the default.** If in doubt, use this scenario.
+
+### Scenario 2: Modifying Code with Existing Tests
+
+When changing code that already has test coverage:
+
+1. Run existing tests — confirm green
+2. Make your change
+3. Run tests again — confirm still green
+4. If your change isn't covered by existing tests, add a test for it
+5. If existing tests already cover the changed behavior, you're done
+
+**Key:** You must verify existing tests pass *before* and *after* your change. If you can't confirm test coverage, fall back to Scenario 1.
+
+### Scenario 3: Trivial Change
+
+For typo fixes, config tweaks, string changes, renames:
+
+- Use judgment
+- If relevant tests exist, run them after your change
+- Don't write a new test for a string literal change
+
+**Be honest:** If the change touches logic, it's not trivial. Use Scenario 1 or 2.
+
+## Interpreting Runtime Warnings
+
+The workflow monitor tracks your TDD phase and may inject warnings like:
+
+```
+⚠️ TDD: Writing source code (src/foo.ts) without a failing test.
+```
+
+**When you see this, pause and assess:**
+- Which scenario applies to this change?
+- If Scenario 2: run existing tests to confirm coverage, then proceed
+- If Scenario 1: write a failing test first
+- If Scenario 3: proceed, run tests after
+
+The warning is a signal to think, not a hard stop.
+
+## The Iron Law (Scenario 1)
 
 ```
 NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
@@ -50,67 +93,161 @@ Write one minimal test showing what should happen.
 
 **Requirements:**
 - One behavior per test
-- Clear name describing behavior
+- Clear name describing behavior (if the name contains "and", split it)
 - Real code (no mocks unless unavoidable)
+- Shows desired API — demonstrates how code should be called
+
+**Good:**
+```typescript
+test('retries failed operations 3 times', async () => {
+  let attempts = 0;
+  const operation = () => {
+    attempts++;
+    if (attempts < 3) throw new Error('fail');
+    return 'success';
+  };
+  const result = await retryOperation(operation);
+  expect(result).toBe('success');
+  expect(attempts).toBe(3);
+});
+```
+
+**Bad:**
+```typescript
+test('retry works', async () => {
+  const mock = jest.fn().mockRejectedValueOnce(new Error()).mockResolvedValueOnce('ok');
+  await retryOperation(mock);
+  expect(mock).toHaveBeenCalledTimes(2);
+});
+```
 
 ### Verify RED — Watch It Fail
 
 **MANDATORY. Never skip.**
 
-Confirm:
-- Test fails (not errors)
-- Failure message is expected
-- Fails because feature missing (not typos)
+Run the test. Confirm:
+- Test **fails** (not errors from syntax/import issues)
+- Failure message matches expectation
+- Fails because the feature is missing (not because of typos)
 
-Test passes? You're testing existing behavior. Fix test.
+**Test passes immediately?** You're testing existing behavior. Fix the test.
+**Test errors instead of failing?** Fix the error, re-run until it fails correctly.
 
 ### GREEN — Minimal Code
 
-Write simplest code to pass the test. Don't add features, refactor other code, or "improve" beyond the test.
+Write the simplest code to pass the test. Nothing more.
+
+Don't add features, refactor other code, or "improve" beyond what the test requires. If you're writing code that no test exercises, stop.
+
+**Good:** Just enough to pass the test.
+**Bad:** Adding options, config, generalization that no test asks for (YAGNI).
 
 ### Verify GREEN — Watch It Pass
 
 **MANDATORY.**
 
-Confirm: test passes, other tests still pass, output pristine.
+Run the test. Confirm:
+- New test passes
+- All other tests still pass
+- Output is pristine (no errors, no warnings)
 
-Test fails? Fix code, not test. Other tests fail? Fix now.
+**Test fails?** Fix code, not test.
+**Other tests fail?** Fix now — don't move on with broken tests.
 
 ### REFACTOR — Clean Up
 
-After green only: remove duplication, improve names, extract helpers. Keep tests green. Don't add behavior.
+Only after green:
+- Remove duplication
+- Improve names
+- Extract helpers
+
+Keep tests green throughout. Don't add new behavior during refactor.
 
 ### Repeat
 
-Next failing test for next feature.
+Next failing test for next behavior.
 
-## Why Order Matters
+## Common Rationalizations
 
-Tests written after code pass immediately — proving nothing. You might test the wrong thing, test implementation not behavior, or miss edge cases.
+| Excuse | Reality |
+|--------|---------|
+| "Too simple to test" | Simple code breaks. Test takes 30 seconds. |
+| "I'll test after" | Tests passing immediately prove nothing. |
+| "Tests after achieve same goals" | Tests-after = "what does this do?" Tests-first = "what should this do?" |
+| "Already manually tested" | Ad-hoc ≠ systematic. No record, can't re-run. |
+| "Deleting X hours is wasteful" | Sunk cost fallacy. Keeping unverified code is technical debt. |
+| "Keep as reference, write tests first" | You'll adapt it. That's testing after. Delete means delete. |
+| "Need to explore first" | Fine. Throw away exploration, start with TDD. |
+| "Test hard = design unclear" | Listen to test. Hard to test = hard to use. |
+| "TDD will slow me down" | TDD faster than debugging. Pragmatic = test-first. |
+| "Existing code has no tests" | You're improving it. Add tests for the code you're changing. |
+| "This is different because..." | It's not. Follow the process. |
 
-Test-first forces you to see the test fail, proving it actually tests something.
+## Red Flags — STOP and Start Over
 
-"Deleting X hours of work is wasteful" is sunk cost fallacy. "TDD is dogmatic" is wrong — TDD IS pragmatic. "Tests after achieve the same goals" — no: tests-after answer "what does this do?" not "what should this do?"
+If you catch yourself doing any of these, stop immediately:
 
-For the full rationalization table and rebuttals, use `workflow_reference({ topic: "tdd-rationalizations" })`.
+- Writing production code before the test
+- Writing tests after implementation
+- Test passes immediately (didn't catch the bug)
+- Can't explain why test failed
+- Rationalizing "just this once"
+- "I already manually tested it"
+- "Keep as reference" or "adapt existing code"
+- "Already spent X hours, deleting is wasteful"
+- "TDD is dogmatic, I'm being pragmatic"
+
+**All of these mean: Delete code. Start over with TDD.**
+
+## Verification Checklist
+
+Before marking work complete:
+
+- [ ] Every new function/method has a test
+- [ ] Watched each test fail before implementing
+- [ ] Each test failed for expected reason (feature missing, not typo)
+- [ ] Wrote minimal code to pass each test
+- [ ] All tests pass
+- [ ] Output pristine (no errors, warnings)
+- [ ] Tests use real code (mocks only if unavoidable)
+- [ ] Edge cases and errors covered
+
+Can't check all boxes? You skipped TDD. Start over.
+
+## When Stuck
+
+| Problem | Solution |
+|---------|----------|
+| Don't know how to test | Write wished-for API. Write assertion first. Ask your human partner. |
+| Test too complicated | Design too complicated. Simplify interface. |
+| Must mock everything | Code too coupled. Use dependency injection. |
+| Test setup huge | Extract helpers. Still complex? Simplify design. |
 
 ## Debugging Integration
 
-Bug found? Write failing test reproducing it. Follow TDD cycle. Never fix bugs without a test.
+Bug found? Write failing test reproducing it. Follow TDD cycle. Test proves fix and prevents regression. Never fix bugs without a test.
+
+## Testing Anti-Patterns
+
+When adding mocks or test utilities, read `testing-anti-patterns.md` in this skill directory to avoid common pitfalls:
+- Testing mock behavior instead of real behavior
+- Adding test-only methods to production classes
+- Mocking without understanding dependencies
 
 ## Reference
 
-Use `workflow_reference` for detailed guidance:
-- `tdd-rationalizations` — Full rationalization table with rebuttals
-- `tdd-examples` — Good/bad code examples, bug fix walkthrough
-- `tdd-when-stuck` — Solutions for common blockers, verification checklist
+Use `workflow_reference` for additional detail:
+- `tdd-rationalizations` — Extended rationalization discussion
+- `tdd-examples` — More good/bad code examples, bug fix walkthrough
+- `tdd-when-stuck` — Extended solutions for common blockers
 - `tdd-anti-patterns` — Mock pitfalls, test-only methods, incomplete mocks
 
 ## Final Rule
 
 ```
-Production code → test exists and failed first
-Otherwise → not TDD
+Production code → test exists and failed first (Scenario 1)
+Modifying tested code → existing tests verified before and after (Scenario 2)
+Trivial change → relevant tests run after (Scenario 3)
 ```
 
 No exceptions without your human partner's permission.

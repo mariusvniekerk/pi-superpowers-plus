@@ -430,7 +430,9 @@ export default function (pi: ExtensionAPI) {
       const executeIdx = WORKFLOW_PHASES.indexOf("execute");
 
       // Completion action gating (interactive only, execute+ phases)
-      if (ctx.hasUI && state && phaseIdx >= executeIdx) {
+      // Suppress during active plan execution — prompts only fire after execution completes
+      const isExecuting = state?.currentPhase === "execute" && state.phases.execute === "active";
+      if (ctx.hasUI && state && phaseIdx >= executeIdx && !isExecuting) {
         const actionTarget = getCompletionActionTarget(command);
         if (actionTarget) {
           const unresolved = getUnresolvedPhasesForAction(actionTarget, state);
@@ -459,20 +461,6 @@ export default function (pi: ExtensionAPI) {
     const input = event.input as Record<string, any>;
     const result = handler.handleToolCall(event.toolName, input);
     if (result.violation) {
-      const state = handler.getWorkflowState();
-      const phase = state?.currentPhase;
-      const isThinkingPhase = phase === "brainstorm" || phase === "plan";
-
-      // During brainstorm/plan, practice escalation is intentionally skipped.
-      // Process violations already block non-plan writes in thinking phases,
-      // making practice escalation redundant and noisy.
-      if (!isThinkingPhase) {
-        const escalation = await maybeEscalate("practice", ctx);
-        if (escalation === "block") {
-          return { blocked: true };
-        }
-      }
-
       pendingViolations.set(toolCallId, result.violation);
       persistState();
     }
@@ -669,16 +657,18 @@ export default function (pi: ExtensionAPI) {
       const phaseAfterSkip = WORKFLOW_PHASES[nextIdx + 1] ?? null;
 
       if (phaseAfterSkip) {
-        handler.advanceWorkflowTo(phaseAfterSkip);
+        const currentState = handler.getWorkflowState();
+        const currentIdx = currentState?.currentPhase ? WORKFLOW_PHASES.indexOf(currentState.currentPhase) : -1;
+        const afterSkipIdx = WORKFLOW_PHASES.indexOf(phaseAfterSkip);
+        if (afterSkipIdx > currentIdx) {
+          handler.advanceWorkflowTo(phaseAfterSkip);
+          const skipSkill = phaseToSkill[phaseAfterSkip] ?? "writing-plans";
+          ctx.ui.setEditorText(`/skill:${skipSkill}`);
+        }
       }
 
       persistState();
       updateWidget(ctx);
-
-      if (phaseAfterSkip) {
-        const skipSkill = phaseToSkill[phaseAfterSkip] ?? "writing-plans";
-        ctx.ui.setEditorText(`/skill:${skipSkill}`);
-      }
     }
   });
 
@@ -757,6 +747,18 @@ export default function (pi: ExtensionAPI) {
       return parts.length > 0 ? new Text(parts.join(theme.fg("dim", "  |  ")), 0, 0) : undefined;
     });
   }
+
+  pi.registerCommand("workflow-reset", {
+    description: "Reset workflow tracker to fresh state for a new task",
+    async handler(_args, ctx) {
+      handler.resetState();
+      persistState();
+      updateWidget(ctx);
+      if (ctx.hasUI) {
+        ctx.ui.notify("Workflow reset. Ready for a new task.", "info");
+      }
+    },
+  });
 
   pi.registerCommand("workflow-next", {
     description: "Start a fresh session for the next workflow phase (optionally referencing an artifact path)",
