@@ -1,4 +1,4 @@
-export const DEFAULT_SUBAGENT_TIMEOUT_MS = 600_000; // 10 minutes
+export const DEFAULT_SUBAGENT_TIMEOUT_MS = 1_200_000; // 20 minutes
 
 export function getSubagentTimeoutMs(agentTimeout?: number): number {
   if (agentTimeout !== undefined && agentTimeout > 0) return agentTimeout;
