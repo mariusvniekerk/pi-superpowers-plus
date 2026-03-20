@@ -400,6 +400,7 @@ export default function (pi: ExtensionAPI) {
   const COMMIT_RE = /\bgit\s+commit\b/;
   const PUSH_RE = /\bgit\s+push\b/;
   const PR_RE = /\bgh\s+pr\s+create\b/;
+  const MERGE_RE = /\bgit\s+merge\b/;
 
   function getCompletionActionTarget(command: string): Phase | null {
     if (COMMIT_RE.test(command)) return "verify";
@@ -594,6 +595,23 @@ export default function (pi: ExtensionAPI) {
         injected.push(getVerificationViolationWarning(verificationViolation.type, verificationViolation.command));
       }
       pendingVerificationViolations.delete(toolCallId);
+
+      // Fix 3: Recognize review on push/PR/merge during finish
+      if (exitCode === 0) {
+        const state = handler.getWorkflowState();
+        if (state?.currentPhase === "finish" && state.phases.review === "pending") {
+          // Push or PR created → review will happen externally
+          if (PUSH_RE.test(command) || PR_RE.test(command)) {
+            handler.completeWorkflowPhase("review");
+            persistState();
+          }
+          // Local merge → user took responsibility
+          if (MERGE_RE.test(command)) {
+            handler.skipWorkflowPhases(["review"]);
+            persistState();
+          }
+        }
+      }
     }
 
     if (event.toolName === "write" || event.toolName === "edit") {
