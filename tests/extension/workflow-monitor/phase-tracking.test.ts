@@ -13,7 +13,11 @@ describe("Phase Tracking Integration Tests", () => {
     // Start in brainstorm phase
     await inputHandler(
       { text: "/skill:brainstorming" },
-      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
     );
 
     // Simulate reading a different skill file (as Pi does when loading available skills)
@@ -25,7 +29,11 @@ describe("Phase Tracking Integration Tests", () => {
         content: [{ type: "text", text: "---\nname: subagent-driven-development\n..." }],
         details: {},
       },
-      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
     );
 
     // Phase should still be brainstorm, NOT execute
@@ -45,7 +53,11 @@ describe("Phase Tracking Integration Tests", () => {
     // Advance to finish phase
     await inputHandler(
       { text: "/skill:finishing-a-development-branch" },
-      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
     );
 
     // Simulate tests passing
@@ -57,7 +69,11 @@ describe("Phase Tracking Integration Tests", () => {
         content: [{ type: "text", text: "5 tests passed" }],
         details: { exitCode: 0 },
       },
-      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
     );
 
     // Verify should now be complete
@@ -78,15 +94,27 @@ describe("Phase Tracking Integration Tests", () => {
     // Simulate completing brainstorm, plan, execute phases first
     await inputHandler(
       { text: "/skill:brainstorming" },
-      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
     );
     await inputHandler(
       { text: "/skill:writing-plans" },
-      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
     );
     await inputHandler(
       { text: "/skill:subagent-driven-development" },
-      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
     );
 
     // Get state after execute phase
@@ -99,7 +127,11 @@ describe("Phase Tracking Integration Tests", () => {
     // Advance to finish phase
     await inputHandler(
       { text: "/skill:finishing-a-development-branch" },
-      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
     );
 
     // Simulate tests passing
@@ -111,7 +143,11 @@ describe("Phase Tracking Integration Tests", () => {
         content: [{ type: "text", text: "5 tests passed" }],
         details: { exitCode: 0 },
       },
-      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
     );
 
     // Verify should be complete AND earlier phases should be preserved
@@ -134,7 +170,11 @@ describe("Phase Tracking Integration Tests", () => {
 
     await inputHandler(
       { text: "/skill:finishing-a-development-branch" },
-      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
     );
 
     await toolResultHandler(
@@ -145,7 +185,11 @@ describe("Phase Tracking Integration Tests", () => {
         content: [{ type: "text", text: "pushed" }],
         details: { exitCode: 0 },
       },
-      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
     );
 
     const stateEntries = appendedEntries.filter((e: any) => e.customType === "superpowers_state");
@@ -163,7 +207,11 @@ describe("Phase Tracking Integration Tests", () => {
 
     await inputHandler(
       { text: "/skill:finishing-a-development-branch" },
-      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
     );
 
     await toolResultHandler(
@@ -174,7 +222,11 @@ describe("Phase Tracking Integration Tests", () => {
         content: [{ type: "text", text: "created PR #123" }],
         details: { exitCode: 0 },
       },
-      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
     );
 
     const stateEntries = appendedEntries.filter((e: any) => e.customType === "superpowers_state");
@@ -191,7 +243,11 @@ describe("Phase Tracking Integration Tests", () => {
 
     await inputHandler(
       { text: "/skill:finishing-a-development-branch" },
-      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
     );
 
     await toolResultHandler(
@@ -202,7 +258,11 @@ describe("Phase Tracking Integration Tests", () => {
         content: [{ type: "text", text: "merged" }],
         details: { exitCode: 0 },
       },
-      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
     );
 
     const stateEntries = appendedEntries.filter((e: any) => e.customType === "superpowers_state");
