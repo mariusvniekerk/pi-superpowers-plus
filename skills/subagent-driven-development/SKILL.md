@@ -74,6 +74,7 @@ digraph process {
         "Code quality reviewer subagent approves?" [shape=diamond];
         "Implementer subagent fixes quality issues" [shape=box];
         "Orchestrator reads Review Summary" [shape=box];
+        "Orchestrator cross-references" [shape=box];
         "Flags present?" [shape=diamond];
         "Orchestrator reviews flagged files" [shape=box];
         "Issues found?" [shape=diamond];
@@ -102,8 +103,9 @@ digraph process {
     "Code quality reviewer subagent approves?" -> "Implementer subagent fixes quality issues" [label="no"];
     "Implementer subagent fixes quality issues" -> "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [label="re-review"];
     "Code quality reviewer subagent approves?" -> "Orchestrator reads Review Summary" [label="yes"];
-    "Orchestrator reads Review Summary" -> "Flags present?";
-    "Flags present?" -> "Mark task complete via plan_tracker tool" [label="no"];
+    "Orchestrator reads Review Summary" -> "Orchestrator cross-references";
+    "Orchestrator cross-references" -> "Flags present?";
+    "Flags present?" -> "Issues found?" [label="no"];
     "Flags present?" -> "Orchestrator reviews flagged files" [label="yes"];
     "Orchestrator reviews flagged files" -> "Issues found?";
     "Issues found?" -> "Mark task complete via plan_tracker tool" [label="no"];
@@ -121,21 +123,23 @@ digraph process {
 
 ### Orchestrator Review
 
-After code quality reviewer approves, the orchestrator performs a final review before marking the task complete.
+After code quality reviewer approves, the orchestrator **always** performs a final review before marking the task complete.
 
 **What the orchestrator reviews:**
 1. Read the Review Summary from code-quality-reviewer
-2. If **Flags for orchestrator** is not "none", open those specific files and review them
-3. Cross-reference with:
+2. **Always** cross-reference mentally with:
    - Previous tasks' implementation summaries (what patterns were established)
    - Upcoming tasks in the plan (does this implementation help or hinder them)
    - Global project context (naming conventions, architectural decisions)
+3. If **Flags for orchestrator** is not "none", open those specific files for detailed review
 
 **What the orchestrator checks:**
 - Consistency with previous tasks (naming, patterns, structure)
 - Side effects on completed work
 - Readiness for upcoming tasks
 - Business context alignment
+
+**Important:** Flags are hints for which files need detailed review, NOT a gate for whether to review. The orchestrator always does the mental cross-reference — this is the core value of this step.
 
 **How the orchestrator acts:**
 

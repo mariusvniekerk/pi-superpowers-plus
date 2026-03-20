@@ -31,12 +31,14 @@ Implementer → Spec Reviewer → Code Quality Reviewer → ORCHESTRATOR → Tas
 
 ### Orchestrator Review Process
 
-After code quality reviewer approves, the orchestrator:
+After code quality reviewer approves, the orchestrator **always** performs a final review:
 
 1. **Read the Review Summary** — Structured output from code-quality-reviewer
-2. **Check flags** — If flags are present, open those specific files
-3. **Cross-reference mentally** — Previous tasks, upcoming tasks, global context
+2. **Cross-reference mentally (ALWAYS)** — Previous tasks, upcoming tasks, global context
+3. **Check flags** — If flags are present, open those specific files for detailed review
 4. **Act if needed** — Fix directly, re-dispatch implementer, or escalate
+
+**Important:** The cross-reference step is ALWAYS done. This is the core value — the orchestrator has global context that subagents lack. Flags are hints for which files need detailed review, NOT a gate for whether to review.
 
 ### Review Summary Format
 
@@ -139,6 +141,7 @@ digraph process {
     "Dispatch code quality reviewer" [shape=box];
     "Code quality reviewer approves?" [shape=diamond];
     "Orchestrator reads Review Summary" [shape=box];
+    "Orchestrator cross-references" [shape=box style=filled fillcolor=lightyellow];
     "Flags present?" [shape=diamond];
     "Orchestrator reviews flagged files" [shape=box];
     "Issues found?" [shape=diamond];
@@ -152,8 +155,9 @@ digraph process {
     "Code quality reviewer approves?" -> "Implementer fixes" [label="no"];
     "Implementer fixes" -> "Dispatch code quality reviewer" [label="re-review"];
     "Code quality reviewer approves?" -> "Orchestrator reads Review Summary" [label="yes"];
-    "Orchestrator reads Review Summary" -> "Flags present?";
-    "Flags present?" -> "Mark task complete" [label="no"];
+    "Orchestrator reads Review Summary" -> "Orchestrator cross-references";
+    "Orchestrator cross-references" -> "Flags present?";
+    "Flags present?" -> "Issues found?" [label="no"];
     "Flags present?" -> "Orchestrator reviews flagged files" [label="yes"];
     "Orchestrator reviews flagged files" -> "Issues found?";
     "Issues found?" -> "Mark task complete" [label="no"];
