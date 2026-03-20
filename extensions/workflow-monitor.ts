@@ -584,9 +584,7 @@ export default function (pi: ExtensionAPI) {
         }
         // Fix 2: Mark verify complete if in finish phase and verify is pending
         if (state?.currentPhase === "finish" && state.phases.verify === "pending") {
-          handler.advanceWorkflowTo("verify");
-          handler.completeCurrentWorkflowPhase();
-          handler.advanceWorkflowTo("finish");
+          handler.completeWorkflowPhase("verify");
           persistState();
         }
       }

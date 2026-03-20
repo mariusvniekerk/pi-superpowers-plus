@@ -128,6 +128,17 @@ export class WorkflowTracker {
     return true;
   }
 
+  /**
+   * Mark a phase as complete without navigation.
+   * Safe to use for backward phase completion (e.g., marking verify complete while in finish phase).
+   */
+  completePhase(phase: Phase): boolean {
+    const status = this.state.phases[phase];
+    if (status !== "pending" && status !== "active") return false;
+    this.state.phases[phase] = "complete";
+    return true;
+  }
+
   skipPhases(phases: Phase[]): boolean {
     let changed = false;
     for (const p of phases) changed = this.skipPhase(p) || changed;

@@ -86,6 +86,7 @@ export interface WorkflowHandler {
   completeCurrentWorkflowPhase(): boolean;
   advanceWorkflowTo(phase: Phase): boolean;
   skipWorkflowPhases(phases: Phase[]): boolean;
+  completeWorkflowPhase(phase: Phase): boolean;
   handleSkillFileRead(path: string): boolean;
   resetState(): void;
 }
@@ -292,6 +293,10 @@ export function createWorkflowHandler(): WorkflowHandler {
 
     skipWorkflowPhases(phases) {
       return tracker.skipPhases(phases);
+    },
+
+    completeWorkflowPhase(phase) {
+      return tracker.completePhase(phase);
     },
 
     handleSkillFileRead(path: string) {

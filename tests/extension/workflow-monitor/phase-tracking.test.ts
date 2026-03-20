@@ -67,4 +67,61 @@ describe("Phase Tracking Integration Tests", () => {
     expect(lastState.phases.verify).toBe("complete");
     expect(lastState.currentPhase).toBe("finish");
   });
+
+  test("tests passing during finish preserves earlier completed phases", async () => {
+    const { api, handlers, appendedEntries } = createFakePi({ withAppendEntry: true });
+    workflowMonitorExtension(api as any);
+
+    const inputHandler = getSingleHandler(handlers, "input");
+    const toolResultHandler = getSingleHandler(handlers, "tool_result");
+
+    // Simulate completing brainstorm, plan, execute phases first
+    await inputHandler(
+      { text: "/skill:brainstorming" },
+      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+    );
+    await inputHandler(
+      { text: "/skill:writing-plans" },
+      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+    );
+    await inputHandler(
+      { text: "/skill:subagent-driven-development" },
+      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+    );
+
+    // Get state after execute phase
+    const stateBeforeFinish = appendedEntries.filter((e: any) => e.customType === "superpowers_state");
+    const executeState = stateBeforeFinish[stateBeforeFinish.length - 1]?.data.workflow;
+    expect(executeState?.phases.brainstorm).toBe("complete");
+    expect(executeState?.phases.plan).toBe("complete");
+    expect(executeState?.phases.execute).toBe("active");
+
+    // Advance to finish phase
+    await inputHandler(
+      { text: "/skill:finishing-a-development-branch" },
+      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+    );
+
+    // Simulate tests passing
+    await toolResultHandler(
+      {
+        toolCallId: "tc1",
+        toolName: "bash",
+        input: { command: "npm test" },
+        content: [{ type: "text", text: "5 tests passed" }],
+        details: { exitCode: 0 },
+      },
+      { hasUI: false, sessionManager: { getBranch: () => [] }, ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} } },
+    );
+
+    // Verify should be complete AND earlier phases should be preserved
+    const stateEntries = appendedEntries.filter((e: any) => e.customType === "superpowers_state");
+    const lastState = stateEntries[stateEntries.length - 1].data.workflow;
+    expect(lastState.phases.verify).toBe("complete");
+    expect(lastState.currentPhase).toBe("finish");
+    // Critical: earlier phases must NOT be reset
+    expect(lastState.phases.brainstorm).toBe("complete");
+    expect(lastState.phases.plan).toBe("complete");
+    expect(lastState.phases.execute).toBe("complete");
+  });
 });
