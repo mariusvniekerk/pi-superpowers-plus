@@ -63,7 +63,12 @@ The code-quality-reviewer must produce this structured output at the end of thei
 If the code quality reviewer doesn't produce a Review Summary or produces a malformed one:
 
 1. **Re-dispatch reviewer** with a reminder: "Your review is missing the required Review Summary section. Please add it in the format specified."
-2. **If re-dispatch also fails**, the orchestrator falls back to reading `git diff HEAD~1` directly and proceeds with the review
+2. **If re-dispatch also fails**, the orchestrator falls back to reading `git diff HEAD~1` directly and proceeds with the review using the same process as when flags are present.
+
+**Fallback review outcomes:**
+- No issues found → Mark task complete
+- Issues found (small fix) → Fix directly
+- Issues found (larger) → Re-dispatch implementer with specific feedback
 
 This ensures the workflow doesn't stall on reviewer non-compliance while maintaining quality.
 
@@ -98,13 +103,32 @@ To prevent context explosion:
    - Add "Orchestrator Review" section with process and action matrix
    - Update DOT diagram with new flow
    - Update example workflow to show orchestrator review
+   - Add to "Red Flags" section: "Never skip orchestrator review when flags are present"
 
 2. **`skills/requesting-code-review/code-reviewer.md`**
    - Add required Review Summary output format at the end of the review template
 
-### No New Files Required
+**Why `code-reviewer.md` and not `code-quality-reviewer-prompt.md`:**
 
-All changes fit into existing files.
+The `code-quality-reviewer-prompt.md` is a dispatch template that tells the orchestrator how to invoke the reviewer. The `code-reviewer.md` is the actual prompt template that gets filled and sent to the subagent. Adding the Review Summary format to `code-reviewer.md` ensures the subagent receives and follows it.
+
+### Re-dispatch Context
+
+When the orchestrator re-dispatches the implementer after finding issues, include:
+
+1. **The specific flag** that triggered the review (e.g., "Modified shared utility")
+2. **The orchestrator's analysis** of the issue (e.g., "Error handling change removes `retryCount` field that Task 2's recover.ts uses")
+3. **The required fix** (e.g., "Preserve `retryCount` field or update Task 2's code")
+4. **Relevant file paths** for context
+
+This ensures the implementer has everything needed to fix efficiently without re-discovering the problem.
+
+### Loop Prevention
+
+Orchestrator-initiated re-dispatches are subject to the same "2 attempts" limit as regular failures (see "When a Subagent Fails" in SKILL.md). After 2 failed orchestrator-initiated fix attempts:
+
+1. If the issue is minor → Log it, mark task complete, note in final report
+2. If the issue is blocking → Escalate to user with full context
 
 ## Updated Flow Diagram
 
