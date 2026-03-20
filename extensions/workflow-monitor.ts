@@ -582,6 +582,13 @@ export default function (pi: ExtensionAPI) {
             persistState();
           }
         }
+        // Fix 2: Mark verify complete if in finish phase and verify is pending
+        if (state?.currentPhase === "finish" && state.phases.verify === "pending") {
+          handler.advanceWorkflowTo("verify");
+          handler.completeCurrentWorkflowPhase();
+          handler.advanceWorkflowTo("finish");
+          persistState();
+        }
       }
 
       const verificationViolation = pendingVerificationViolations.get(toolCallId);
