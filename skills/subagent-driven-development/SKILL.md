@@ -73,6 +73,13 @@ digraph process {
         "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [shape=box];
         "Code quality reviewer subagent approves?" [shape=diamond];
         "Implementer subagent fixes quality issues" [shape=box];
+        "Orchestrator reads Review Summary" [shape=box];
+        "Flags present?" [shape=diamond];
+        "Orchestrator reviews flagged files" [shape=box];
+        "Issues found?" [shape=diamond];
+        "Small fix (see action matrix)?" [shape=diamond];
+        "Orchestrator fixes directly" [shape=box];
+        "Re-dispatch implementer" [shape=box];
         "Mark task complete via plan_tracker tool" [shape=box];
     }
 
@@ -94,7 +101,17 @@ digraph process {
     "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" -> "Code quality reviewer subagent approves?";
     "Code quality reviewer subagent approves?" -> "Implementer subagent fixes quality issues" [label="no"];
     "Implementer subagent fixes quality issues" -> "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [label="re-review"];
-    "Code quality reviewer subagent approves?" -> "Mark task complete via plan_tracker tool" [label="yes"];
+    "Code quality reviewer subagent approves?" -> "Orchestrator reads Review Summary" [label="yes"];
+    "Orchestrator reads Review Summary" -> "Flags present?";
+    "Flags present?" -> "Mark task complete via plan_tracker tool" [label="no"];
+    "Flags present?" -> "Orchestrator reviews flagged files" [label="yes"];
+    "Orchestrator reviews flagged files" -> "Issues found?";
+    "Issues found?" -> "Mark task complete via plan_tracker tool" [label="no"];
+    "Issues found?" -> "Small fix (see action matrix)?" [label="yes"];
+    "Small fix (see action matrix)?" -> "Orchestrator fixes directly" [label="yes"];
+    "Small fix (see action matrix)?" -> "Re-dispatch implementer" [label="no"];
+    "Orchestrator fixes directly" -> "Mark task complete via plan_tracker tool";
+    "Re-dispatch implementer" -> "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)";
     "Mark task complete via plan_tracker tool" -> "More tasks remain?";
     "More tasks remain?" -> "Dispatch implementer subagent (./implementer-prompt.md)" [label="yes"];
     "More tasks remain?" -> "Dispatch final code reviewer subagent for entire implementation" [label="no"];
