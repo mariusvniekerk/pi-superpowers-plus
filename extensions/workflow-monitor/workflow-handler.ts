@@ -232,6 +232,11 @@ export function createWorkflowHandler(): WorkflowHandler {
       if (input.action === "init") {
         return tracker.onPlanTrackerInit();
       }
+      // Recognize plan_tracker update with status="complete" as workflow phase completion signal
+      // This is used by brainstorming and writing-plans skills to mark their phases complete
+      if (input.action === "update" && input.status === "complete") {
+        return tracker.completeCurrent();
+      }
       return false;
     },
 

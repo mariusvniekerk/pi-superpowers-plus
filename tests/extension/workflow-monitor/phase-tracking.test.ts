@@ -3,6 +3,50 @@ import workflowMonitorExtension from "../../../extensions/workflow-monitor";
 import { createFakePi, getSingleHandler } from "./test-helpers";
 
 describe("Phase Tracking Integration Tests", () => {
+  test("plan_tracker update with status=complete marks current workflow phase as complete", async () => {
+    const { api, handlers, appendedEntries } = createFakePi({ withAppendEntry: true });
+    workflowMonitorExtension(api as any);
+
+    const inputHandler = getSingleHandler(handlers, "input");
+    const toolCallHandler = getSingleHandler(handlers, "tool_call");
+
+    // Start in brainstorm phase
+    await inputHandler(
+      { text: "/skill:brainstorming" },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
+    );
+
+    // Verify brainstorm is active
+    let stateEntries = appendedEntries.filter((e: any) => e.customType === "superpowers_state");
+    let lastState = stateEntries[stateEntries.length - 1]?.data.workflow;
+    expect(lastState?.currentPhase).toBe("brainstorm");
+    expect(lastState?.phases.brainstorm).toBe("active");
+
+    // Simulate plan_tracker update with status=complete (as skills do when finishing)
+    await toolCallHandler(
+      {
+        toolCallId: "tc1",
+        toolName: "plan_tracker",
+        input: { action: "update", index: 0, status: "complete" },
+      },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
+    );
+
+    // Verify brainstorm is now complete
+    stateEntries = appendedEntries.filter((e: any) => e.customType === "superpowers_state");
+    lastState = stateEntries[stateEntries.length - 1]?.data.workflow;
+    expect(lastState?.phases.brainstorm).toBe("complete");
+    expect(lastState?.currentPhase).toBe("brainstorm"); // still current until next advance
+  });
+
   test("reading skill file does NOT advance workflow phase", async () => {
     const { api, handlers, appendedEntries } = createFakePi({ withAppendEntry: true });
     workflowMonitorExtension(api as any);
