@@ -109,10 +109,10 @@ digraph process {
 
 ### Orchestrator Review
 
-After code quality reviewer approves, the orchestrator **always** performs a final review before marking the task complete.
+After Critical/Safety reviewer approves, the orchestrator **always** performs a final review before marking the task complete.
 
 **What the orchestrator reviews:**
-1. Read the Review Summary from code-quality-reviewer
+1. Read the Review Summary from critical-reviewer
 2. **Always** cross-reference mentally with:
    - Previous tasks' implementation summaries (what patterns were established)
    - Upcoming tasks in the plan (does this implementation help or hinder them)
@@ -141,6 +141,19 @@ After code quality reviewer approves, the orchestrator **always** performs a fin
 | Logic changes affecting multiple files | Re-dispatch implementer |
 | Architectural concerns | Escalate to user |
 
+### Action Matrix for Critical Reviewer Problems
+
+When the Critical/Safety reviewer finds issues, use this matrix to decide who fixes:
+
+| Problem type | Action |
+|--------------|--------|
+| Implementation debris (console.log, etc) | Orchestrator removes directly |
+| Unused import | Orchestrator removes directly |
+| Simple security risk | Orchestrator fixes if obvious, otherwise re-dispatch |
+| Side effect in dependency | Re-dispatch implementer with context |
+| Complex technical risk | Re-dispatch implementer with context |
+| Architectural problem | Escalate to user |
+
 **Re-dispatch context:**
 
 When re-dispatching implementer after finding issues, include:
@@ -157,7 +170,7 @@ Orchestrator-initiated re-dispatches are subject to the same "2 attempts" limit 
 
 **Edge case: Missing or malformed Review Summary**
 
-If the code quality reviewer doesn't produce a Review Summary:
+If the Critical/Safety reviewer doesn't produce a Review Summary:
 1. Re-dispatch reviewer with format reminder
 2. If still missing, fall back to `git diff HEAD~1` and proceed with review
 
