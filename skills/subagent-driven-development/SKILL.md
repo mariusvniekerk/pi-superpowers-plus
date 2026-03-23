@@ -178,11 +178,11 @@ subagent({ agent: "implementer", task: "... full implementer prompt text ..." })
 ```
 
 ```ts
-subagent({ agent: "quality-spec-reviewer", task: "... full quality+spec review prompt text ..." })
+subagent({ agent: "quality-spec-reviewer", agentScope: "both", task: "... full quality+spec review prompt text ..." })
 ```
 
 ```ts
-subagent({ agent: "critical-reviewer", task: "... full critical/safety review prompt text ..." })
+subagent({ agent: "critical-reviewer", agentScope: "both", task: "... full critical/safety review prompt text ..." })
 ```
 
 ## Handling Implementer Status
