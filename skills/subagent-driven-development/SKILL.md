@@ -234,11 +234,19 @@ Implementer: "Got it. Implementing now..."
   - Self-review: Found I missed --force flag, added it
   - Committed
 
-[Dispatch spec compliance reviewer]
-Spec reviewer: ✅ Spec compliant - all requirements met, nothing extra
+[Dispatch Quality+Spec reviewer]
+Quality+Spec reviewer: 
+  - Spec compliance: ✅ Full
+  - Code quality: Clean, good test coverage
+  - Approved.
 
-[Get git SHAs, dispatch code quality reviewer]
-Code reviewer: Strengths: Good test coverage, clean. Issues: None. Approved.
+[Get git SHAs, dispatch Critical/Safety reviewer]
+Critical reviewer:
+  - Affected dependents: none identified
+  - Side effect risk: None
+  - Security risks: none
+  - Debris: none
+  - Approved.
 
 [Orchestrator review]
   - Reads Review Summary
@@ -261,25 +269,35 @@ Implementer:
   - Self-review: All good
   - Committed
 
-[Dispatch spec compliance reviewer]
-Spec reviewer: ❌ Issues:
+[Dispatch Quality+Spec reviewer]
+Quality+Spec reviewer: ❌ Issues:
+  - Spec compliance: ⚠️ Partial
   - Missing: Progress reporting (spec says "report every 100 items")
   - Extra: Added --json flag (not requested)
 
 [Implementer fixes issues]
 Implementer: Removed --json flag, added progress reporting
 
-[Spec reviewer reviews again]
-Spec reviewer: ✅ Spec compliant now
+[Quality+Spec reviewer reviews again]
+Quality+Spec reviewer: ✅ Spec compliance: Full. Approved.
 
-[Dispatch code quality reviewer]
-Code reviewer: Strengths: Solid. Issues (Important): Magic number (100)
+[Dispatch Critical/Safety reviewer]
+Critical reviewer:
+  - Affected dependents: `src/cli.ts` imports `verifyMode()` which now has new param
+  - Side effect risk: Medium - cli.ts needs update
+  - Action: Re-dispatch implementer
 
-[Implementer fixes]
-Implementer: Extracted PROGRESS_INTERVAL constant
+[Re-dispatch implementer with context]
+Implementer: Updated cli.ts to pass new param to verifyMode()
 
-[Code reviewer reviews again]
-Code reviewer: ✅ Approved
+[Quality+Spec reviewer]
+Quality+Spec reviewer: ✅ Approved
+
+[Critical/Safety reviewer]
+Critical reviewer:
+  - Affected dependents: none identified (all updated)
+  - Side effect risk: None
+  - Approved.
 
 [Orchestrator review]
   - Reads Review Summary
@@ -291,11 +309,9 @@ Code reviewer: ✅ Approved
 
 ...
 
-[After all tasks]
-[Dispatch final code-reviewer]
-Final reviewer: All requirements met, ready to merge
+[After all tasks complete]
 
-Done!
+Done! Use /skill:finishing-a-development-branch for final integration.
 ```
 
 ## Red Flags
