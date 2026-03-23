@@ -302,19 +302,23 @@ Done!
 
 **Never:**
 - Start implementation on main/master branch without explicit user consent
-- Skip reviews (spec compliance OR code quality)
+- Skip reviews (Quality+Spec OR Critical/Safety)
 - Proceed with unfixed issues
 - Dispatch multiple implementation subagents in parallel (conflicts)
 - Make subagent read plan file (provide full text instead)
 - Skip scene-setting context (subagent needs to understand where task fits)
 - Ignore subagent questions (answer before letting them proceed)
-- Accept "close enough" on spec compliance (spec reviewer found issues = not done)
+- Accept "close enough" on spec compliance (Quality+Spec reviewer found issues = not done)
 - Skip review loops (reviewer found issues = implementer fixes = review again)
 - Let implementer self-review replace actual review (both are needed)
 - Skip orchestrator review when flags are present (read the summary, check flagged files)
-- **Start code quality review before spec compliance is ✅** (wrong order)
+- **Start Critical/Safety review before Quality+Spec is ✅** (wrong order)
 - Move to next task while either review has open issues
 - Ignore `DONE_WITH_CONCERNS`, `BLOCKED`, or `NEEDS_CONTEXT`
+- **Skip Critical/Safety review after Quality+Spec passes**
+- **Ignore "Affected dependents" from Critical/Safety reviewer**
+- **Accept implementation debris (console.log, var_dump, etc) without flagging**
+- **Ignore security risks identified by Critical/Safety reviewer**
 
 **If subagent asks questions:**
 - Answer clearly and completely
