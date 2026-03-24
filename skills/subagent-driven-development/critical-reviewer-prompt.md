@@ -103,14 +103,14 @@ git diff {BASE_SHA}..{HEAD_SHA}
 
 **Risks found:**
 - [risk type] at `file:line` — [description and severity]
-- OU "None identified"
+- OR "None identified"
 
 ### Implementation Debris
 
 **Debris found:**
 - `console.log` at `file:line`
 - `TODO` at `file:line`: [content]
-- OU "None found"
+- OR "None found"
 
 ### Assessment
 
@@ -165,7 +165,7 @@ git diff {BASE_SHA}..{HEAD_SHA}
 **How to dispatch:**
 
 ```ts
-subagent({ agent: "critical-reviewer", task: "... filled template ..." })
+subagent({ agent: "critical-reviewer", agentScope: "both", task: "... filled template ..." })
 ```
 
 **Placeholders:**
