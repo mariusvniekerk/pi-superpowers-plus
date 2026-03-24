@@ -7,9 +7,9 @@ description: Use when executing implementation plans with independent tasks in t
 
 # Subagent-Driven Development
 
-Execute plan by dispatching fresh subagent per task, with two-stage review after each: spec compliance review first, then code quality review.
+Execute plan by dispatching fresh subagent per task, with two-stage review after each: Quality+Spec review first, then Critical/Safety review.
 
-**Core principle:** Fresh subagent per task + two-stage review (spec then quality) = high quality, fast iteration
+**Core principle:** Fresh subagent per task + two-stage review (quality+spec → critical) = high quality, catches blind spots
 
 If a tool result contains a ⚠️ workflow warning, stop immediately and address it before continuing.
 
@@ -40,7 +40,7 @@ digraph when_to_use {
 **vs. Executing Plans (parallel session):**
 - Same session (no context switch)
 - Fresh subagent per task (no context pollution)
-- Two-stage review after each task: spec compliance first, then code quality
+- Two-stage review after each task: Quality+Spec first, then Critical/Safety
 - Faster iteration (no human-in-loop between tasks)
 
 **Dependent tasks:** Most real plans have some dependencies. For dependent tasks, include the previous task's implementation summary and relevant file paths in the next subagent's context. Track what each completed task produced so you can pass it forward.
@@ -66,67 +66,53 @@ digraph process {
         "Dispatch implementer subagent (./implementer-prompt.md)" [shape=box];
         "Implementer subagent asks questions?" [shape=diamond];
         "Answer questions, provide context" [shape=box];
-        "Implementer subagent implements, tests, commits, self-reviews" [shape=box];
-        "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)" [shape=box];
-        "Spec reviewer subagent confirms code matches spec?" [shape=diamond];
-        "Implementer subagent fixes spec gaps" [shape=box];
-        "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [shape=box];
-        "Code quality reviewer subagent approves?" [shape=diamond];
-        "Implementer subagent fixes quality issues" [shape=box];
-        "Orchestrator reads Review Summary" [shape=box];
+        "Implementer subagent implements, tests, commits" [shape=box];
+        "Dispatch Quality+Spec Reviewer (./quality-spec-reviewer-prompt.md)" [shape=box];
+        "Quality+Spec reviewer approves?" [shape=diamond];
+        "Implementer subagent fixes issues" [shape=box];
+        "Dispatch Critical/Safety Reviewer (./critical-reviewer-prompt.md)" [shape=box];
+        "Critical reviewer approves?" [shape=diamond];
+        "Assess fix complexity (action matrix)" [shape=diamond];
+        "Orchestrator fixes directly" [shape=box];
+        "Re-dispatch implementer" [shape=box];
         "Orchestrator cross-references" [shape=box];
         "Flags present?" [shape=diamond];
         "Orchestrator reviews flagged files" [shape=box];
         "Issues found?" [shape=diamond];
-        "Small fix (see action matrix)?" [shape=diamond];
-        "Orchestrator fixes directly" [shape=box];
-        "Re-dispatch implementer" [shape=box];
         "Mark task complete via plan_tracker tool" [shape=box];
     }
 
-    "Read plan, extract all tasks with full text, note context, initialize plan_tracker tool" [shape=box];
-    "More tasks remain?" [shape=diamond];
-    "Dispatch final code reviewer subagent for entire implementation" [shape=box];
-    "Use /skill:finishing-a-development-branch" [shape=box style=filled fillcolor=lightgreen];
-
-    "Read plan, extract all tasks with full text, note context, initialize plan_tracker tool" -> "Dispatch implementer subagent (./implementer-prompt.md)";
     "Dispatch implementer subagent (./implementer-prompt.md)" -> "Implementer subagent asks questions?";
     "Implementer subagent asks questions?" -> "Answer questions, provide context" [label="yes"];
     "Answer questions, provide context" -> "Dispatch implementer subagent (./implementer-prompt.md)";
-    "Implementer subagent asks questions?" -> "Implementer subagent implements, tests, commits, self-reviews" [label="no"];
-    "Implementer subagent implements, tests, commits, self-reviews" -> "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)";
-    "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)" -> "Spec reviewer subagent confirms code matches spec?";
-    "Spec reviewer subagent confirms code matches spec?" -> "Implementer subagent fixes spec gaps" [label="no"];
-    "Implementer subagent fixes spec gaps" -> "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)" [label="re-review"];
-    "Spec reviewer subagent confirms code matches spec?" -> "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [label="yes"];
-    "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" -> "Code quality reviewer subagent approves?";
-    "Code quality reviewer subagent approves?" -> "Implementer subagent fixes quality issues" [label="no"];
-    "Implementer subagent fixes quality issues" -> "Dispatch code quality reviewer subagent (./code-quality-reviewer-prompt.md)" [label="re-review"];
-    "Code quality reviewer subagent approves?" -> "Orchestrator reads Review Summary" [label="yes"];
-    "Orchestrator reads Review Summary" -> "Orchestrator cross-references";
+    "Implementer subagent asks questions?" -> "Implementer subagent implements, tests, commits" [label="no"];
+    "Implementer subagent implements, tests, commits" -> "Dispatch Quality+Spec Reviewer (./quality-spec-reviewer-prompt.md)";
+    "Dispatch Quality+Spec Reviewer (./quality-spec-reviewer-prompt.md)" -> "Quality+Spec reviewer approves?";
+    "Quality+Spec reviewer approves?" -> "Implementer subagent fixes issues" [label="no"];
+    "Implementer subagent fixes issues" -> "Dispatch Quality+Spec Reviewer (./quality-spec-reviewer-prompt.md)" [label="re-review"];
+    "Quality+Spec reviewer approves?" -> "Dispatch Critical/Safety Reviewer (./critical-reviewer-prompt.md)" [label="yes"];
+    "Dispatch Critical/Safety Reviewer (./critical-reviewer-prompt.md)" -> "Critical reviewer approves?";
+    "Critical reviewer approves?" -> "Assess fix complexity (action matrix)" [label="no"];
+    "Assess fix complexity (action matrix)" -> "Orchestrator fixes directly" [label="simple"];
+    "Assess fix complexity (action matrix)" -> "Re-dispatch implementer" [label="complex"];
+    "Orchestrator fixes directly" -> "Dispatch Critical/Safety Reviewer (./critical-reviewer-prompt.md)" [label="re-review"];
+    "Re-dispatch implementer" -> "Dispatch Quality+Spec Reviewer (./quality-spec-reviewer-prompt.md)" [label="re-review"];
+    "Critical reviewer approves?" -> "Orchestrator cross-references" [label="yes"];
     "Orchestrator cross-references" -> "Flags present?";
-    "Flags present?" -> "Issues found?" [label="no"];
     "Flags present?" -> "Orchestrator reviews flagged files" [label="yes"];
+    "Flags present?" -> "Issues found?" [label="no"];
     "Orchestrator reviews flagged files" -> "Issues found?";
     "Issues found?" -> "Mark task complete via plan_tracker tool" [label="no"];
-    "Issues found?" -> "Small fix (see action matrix)?" [label="yes"];
-    "Small fix (see action matrix)?" -> "Orchestrator fixes directly" [label="yes"];
-    "Small fix (see action matrix)?" -> "Re-dispatch implementer" [label="no"];
-    "Orchestrator fixes directly" -> "Mark task complete via plan_tracker tool";
-    "Re-dispatch implementer" -> "Dispatch spec reviewer subagent (./spec-reviewer-prompt.md)";
-    "Mark task complete via plan_tracker tool" -> "More tasks remain?";
-    "More tasks remain?" -> "Dispatch implementer subagent (./implementer-prompt.md)" [label="yes"];
-    "More tasks remain?" -> "Dispatch final code reviewer subagent for entire implementation" [label="no"];
-    "Dispatch final code reviewer subagent for entire implementation" -> "Use /skill:finishing-a-development-branch";
+    "Issues found?" -> "Assess fix complexity (action matrix)" [label="yes"];
 }
 ```
 
 ### Orchestrator Review
 
-After code quality reviewer approves, the orchestrator **always** performs a final review before marking the task complete.
+After Critical/Safety reviewer approves, the orchestrator **always** performs a final review before marking the task complete.
 
 **What the orchestrator reviews:**
-1. Read the Review Summary from code-quality-reviewer
+1. Read the Review Summary from critical-reviewer
 2. **Always** cross-reference mentally with:
    - Previous tasks' implementation summaries (what patterns were established)
    - Upcoming tasks in the plan (does this implementation help or hinder them)
@@ -155,7 +141,20 @@ After code quality reviewer approves, the orchestrator **always** performs a fin
 | Logic changes affecting multiple files | Re-dispatch implementer |
 | Architectural concerns | Escalate to user |
 
-**Re-dispatch context:**
+### Action Matrix for Critical Reviewer Problems
+
+When the Critical/Safety reviewer finds issues, use this matrix to decide who fixes:
+
+| Problem type | Action |
+|--------------|--------|
+| Implementation debris (console.log, etc) | Orchestrator removes directly |
+| Unused import | Orchestrator removes directly |
+| Simple security risk | Orchestrator fixes if obvious, otherwise re-dispatch |
+| Side effect in dependency | Re-dispatch implementer with context |
+| Complex technical risk | Re-dispatch implementer with context |
+| Architectural problem | Escalate to user |
+
+#### Re-dispatch Context
 
 When re-dispatching implementer after finding issues, include:
 1. The specific flag that triggered the review
@@ -169,9 +168,9 @@ Orchestrator-initiated re-dispatches are subject to the same "2 attempts" limit 
 - Minor issue → Log it, mark task complete, note in final report
 - Blocking issue → Escalate to user with full context
 
-**Edge case: Missing or malformed Review Summary**
+#### Edge Case: Missing or Malformed Review Summary
 
-If the code quality reviewer doesn't produce a Review Summary:
+If the Critical/Safety reviewer doesn't produce a Review Summary:
 1. Re-dispatch reviewer with format reminder
 2. If still missing, fall back to `git diff HEAD~1` and proceed with review
 
@@ -180,8 +179,8 @@ Fallback review outcomes follow the same action matrix.
 ## Prompt Templates
 
 - `./implementer-prompt.md` - Dispatch implementer subagent
-- `./spec-reviewer-prompt.md` - Dispatch spec compliance reviewer subagent
-- `./code-quality-reviewer-prompt.md` - Dispatch code quality reviewer subagent
+- `./quality-spec-reviewer-prompt.md` - Dispatch Quality+Spec reviewer subagent
+- `./critical-reviewer-prompt.md` - Dispatch Critical/Safety reviewer subagent
 
 **How to dispatch:**
 
@@ -192,18 +191,18 @@ subagent({ agent: "implementer", task: "... full implementer prompt text ..." })
 ```
 
 ```ts
-subagent({ agent: "spec-reviewer", task: "... full review prompt text ..." })
+subagent({ agent: "quality-spec-reviewer", agentScope: "both", task: "... full quality+spec review prompt text ..." })
 ```
 
 ```ts
-subagent({ agent: "code-reviewer", task: "... full review prompt text ..." })
+subagent({ agent: "critical-reviewer", agentScope: "both", task: "... full critical/safety review prompt text ..." })
 ```
 
 ## Handling Implementer Status
 
 Implementer subagents report one of four statuses. Handle them explicitly:
 
-- **`DONE`** — proceed to spec compliance review
+- **`DONE`** — proceed to Quality+Spec review
 - **`DONE_WITH_CONCERNS`** — read the concerns before proceeding; if they affect correctness or scope, address them first
 - **`NEEDS_CONTEXT`** — provide the missing context and re-dispatch
 - **`BLOCKED`** — change something before retrying: provide more context, use a stronger model, split the task, or escalate to the user
@@ -235,11 +234,20 @@ Implementer: "Got it. Implementing now..."
   - Self-review: Found I missed --force flag, added it
   - Committed
 
-[Dispatch spec compliance reviewer]
-Spec reviewer: ✅ Spec compliant - all requirements met, nothing extra
+[Dispatch Quality+Spec reviewer]
+Quality+Spec reviewer: 
+  - Spec compliance: ✅ Full
+  - Code quality: Clean, good test coverage
+  - Approved.
 
-[Get git SHAs, dispatch code quality reviewer]
-Code reviewer: Strengths: Good test coverage, clean. Issues: None. Approved.
+[Get git SHAs, dispatch Critical/Safety reviewer]
+Critical reviewer:
+  - Affected dependents: none identified
+  - Flags for orchestrator: shared config module (new dependency)
+  - Side effect risk: None
+  - Security risks: none
+  - Debris: none
+  - Approved.
 
 [Orchestrator review]
   - Reads Review Summary
@@ -262,25 +270,35 @@ Implementer:
   - Self-review: All good
   - Committed
 
-[Dispatch spec compliance reviewer]
-Spec reviewer: ❌ Issues:
+[Dispatch Quality+Spec reviewer]
+Quality+Spec reviewer: ❌ Issues:
+  - Spec compliance: ⚠️ Partial
   - Missing: Progress reporting (spec says "report every 100 items")
   - Extra: Added --json flag (not requested)
 
 [Implementer fixes issues]
 Implementer: Removed --json flag, added progress reporting
 
-[Spec reviewer reviews again]
-Spec reviewer: ✅ Spec compliant now
+[Quality+Spec reviewer reviews again]
+Quality+Spec reviewer: ✅ Spec compliance: Full. Approved.
 
-[Dispatch code quality reviewer]
-Code reviewer: Strengths: Solid. Issues (Important): Magic number (100)
+[Dispatch Critical/Safety reviewer]
+Critical reviewer:
+  - Affected dependents: `src/cli.ts` imports `verifyMode()` which now has new param
+  - Side effect risk: Medium - cli.ts needs update
+  - Action: Re-dispatch implementer
 
-[Implementer fixes]
-Implementer: Extracted PROGRESS_INTERVAL constant
+[Re-dispatch implementer with context]
+Implementer: Updated cli.ts to pass new param to verifyMode()
 
-[Code reviewer reviews again]
-Code reviewer: ✅ Approved
+[Quality+Spec reviewer]
+Quality+Spec reviewer: ✅ Approved
+
+[Critical/Safety reviewer]
+Critical reviewer:
+  - Affected dependents: none identified (all updated)
+  - Side effect risk: None
+  - Approved.
 
 [Orchestrator review]
   - Reads Review Summary
@@ -292,30 +310,32 @@ Code reviewer: ✅ Approved
 
 ...
 
-[After all tasks]
-[Dispatch final code-reviewer]
-Final reviewer: All requirements met, ready to merge
+[After all tasks complete]
 
-Done!
+Done! Use /skill:finishing-a-development-branch for final integration.
 ```
 
 ## Red Flags
 
 **Never:**
 - Start implementation on main/master branch without explicit user consent
-- Skip reviews (spec compliance OR code quality)
+- Skip reviews (Quality+Spec OR Critical/Safety)
 - Proceed with unfixed issues
 - Dispatch multiple implementation subagents in parallel (conflicts)
 - Make subagent read plan file (provide full text instead)
 - Skip scene-setting context (subagent needs to understand where task fits)
 - Ignore subagent questions (answer before letting them proceed)
-- Accept "close enough" on spec compliance (spec reviewer found issues = not done)
+- Accept "close enough" on spec compliance (Quality+Spec reviewer found issues = not done)
 - Skip review loops (reviewer found issues = implementer fixes = review again)
 - Let implementer self-review replace actual review (both are needed)
 - Skip orchestrator review when flags are present (read the summary, check flagged files)
-- **Start code quality review before spec compliance is ✅** (wrong order)
+- **Start Critical/Safety review before Quality+Spec is ✅** (wrong order)
 - Move to next task while either review has open issues
 - Ignore `DONE_WITH_CONCERNS`, `BLOCKED`, or `NEEDS_CONTEXT`
+- **Skip Critical/Safety review after Quality+Spec passes**
+- **Ignore "Affected dependents" from Critical/Safety reviewer**
+- **Accept implementation debris (console.log, var_dump, etc) without flagging**
+- **Ignore security risks identified by Critical/Safety reviewer**
 
 **If subagent asks questions:**
 - Answer clearly and completely
