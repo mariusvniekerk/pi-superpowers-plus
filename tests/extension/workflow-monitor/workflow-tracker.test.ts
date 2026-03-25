@@ -236,6 +236,29 @@ describe("WorkflowTracker detection helpers", () => {
     expect(s.artifacts.plan).toBe("docs/plans/2026-02-11-foo-implementation.md");
   });
 
+  test("detects writing a generic plan markdown and advances from brainstorm to plan", () => {
+    const tracker = new WorkflowTracker();
+    tracker.advanceTo("brainstorm");
+
+    tracker.onFileWritten("docs/plans/2026-02-11-foo-plan.md");
+
+    const s = tracker.getState();
+    expect(s.currentPhase).toBe("plan");
+    expect(s.phases.brainstorm).toBe("complete");
+    expect(s.artifacts.plan).toBe("docs/plans/2026-02-11-foo-plan.md");
+  });
+
+  test("editing plan docs during execute does not move workflow backward", () => {
+    const tracker = new WorkflowTracker();
+    tracker.advanceTo("execute");
+
+    tracker.onFileWritten("docs/plans/2026-02-11-foo-implementation.md");
+
+    const s = tracker.getState();
+    expect(s.currentPhase).toBe("execute");
+    expect(s.phases.execute).toBe("active");
+  });
+
   test("detects plan_tracker init and advances to execute", () => {
     const tracker = new WorkflowTracker();
     tracker.onPlanTrackerInit();

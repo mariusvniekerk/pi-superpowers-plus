@@ -381,6 +381,48 @@ describe("completion-action gating on bash commands", () => {
     expect(result?.blocked).not.toBe(true);
   });
 
+  test("plan task updates must not end execute phase and trigger verify/review skip prompt", async () => {
+    const state = createWorkflowState(
+      {
+        brainstorm: "complete",
+        plan: "complete",
+        execute: "active",
+        verify: "pending",
+        review: "pending",
+        finish: "pending",
+      },
+      "execute",
+    );
+
+    const { onSessionSwitch, onToolCall } = await setupExtension(state);
+    const { ctx } = createCtx(state, true);
+
+    await onSessionSwitch({}, ctx);
+
+    // Simulate normal task completion update from plan_tracker
+    await onToolCall(
+      {
+        toolCallId: "pt1",
+        toolName: "plan_tracker",
+        input: { action: "update", index: 0, status: "complete" },
+      },
+      ctx,
+    );
+
+    // Command includes checkout + push; should not be gated while still executing
+    const result = await onToolCall(
+      {
+        toolCallId: "tc1",
+        toolName: "bash",
+        input: { command: "git checkout -b temp-sync && git push -u origin temp-sync" },
+      },
+      ctx,
+    );
+
+    expect(ctx.ui.select).not.toHaveBeenCalled();
+    expect(result?.blocked).not.toBe(true);
+  });
+
   test("completion gate prompts with string labels (not objects)", async () => {
     const state = createWorkflowState(
       {

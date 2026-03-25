@@ -73,6 +73,7 @@ export const SKILL_TO_PHASE: Record<string, Phase> = {
 const PLANS_DIR_RE = /^docs\/plans\//;
 const DESIGN_RE = /-design\.md$/;
 const IMPLEMENTATION_RE = /-implementation\.md$/;
+const MARKDOWN_RE = /\.md$/;
 
 export class WorkflowTracker {
   private state: WorkflowTrackerState = emptyState();
@@ -188,18 +189,40 @@ export class WorkflowTracker {
     return this.advanceTo(phase);
   }
 
+  private advanceFromArtifact(phase: Phase): boolean {
+    const current = this.state.currentPhase;
+    if (!current) return this.advanceTo(phase);
+
+    const currentIdx = WORKFLOW_PHASES.indexOf(current);
+    const targetIdx = WORKFLOW_PHASES.indexOf(phase);
+
+    // Artifact writes should never reset workflow or move backward.
+    // We only auto-advance when artifact evidence points to a later phase.
+    if (targetIdx <= currentIdx) return false;
+    return this.advanceTo(phase);
+  }
+
   onFileWritten(path: string): boolean {
     if (!PLANS_DIR_RE.test(path)) return false;
 
     if (DESIGN_RE.test(path)) {
       const changedArtifact = this.recordArtifact("brainstorm", path);
-      const changedPhase = this.advanceTo("brainstorm");
+      const changedPhase = this.advanceFromArtifact("brainstorm");
       return changedArtifact || changedPhase;
     }
 
     if (IMPLEMENTATION_RE.test(path)) {
       const changedArtifact = this.recordArtifact("plan", path);
-      const changedPhase = this.advanceTo("plan");
+      const changedPhase = this.advanceFromArtifact("plan");
+      return changedArtifact || changedPhase;
+    }
+
+    // writing-plans skill saves to docs/plans/YYYY-MM-DD-<feature-name>.md
+    // (without -implementation suffix). Treat generic markdown as plan artifact
+    // when planning starts from brainstorm.
+    if (MARKDOWN_RE.test(path) && this.state.currentPhase === "brainstorm") {
+      const changedArtifact = this.recordArtifact("plan", path);
+      const changedPhase = this.advanceFromArtifact("plan");
       return changedArtifact || changedPhase;
     }
 

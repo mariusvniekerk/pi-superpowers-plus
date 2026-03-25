@@ -3,7 +3,7 @@ import workflowMonitorExtension from "../../../extensions/workflow-monitor";
 import { createFakePi, getSingleHandler } from "./test-helpers";
 
 describe("Phase Tracking Integration Tests", () => {
-  test("plan_tracker update with status=complete marks current workflow phase as complete", async () => {
+  test("plan_tracker update with status=complete and no index marks current workflow phase as complete", async () => {
     const { api, handlers, appendedEntries } = createFakePi({ withAppendEntry: true });
     workflowMonitorExtension(api as any);
 
@@ -26,12 +26,12 @@ describe("Phase Tracking Integration Tests", () => {
     expect(lastState?.currentPhase).toBe("brainstorm");
     expect(lastState?.phases.brainstorm).toBe("active");
 
-    // Simulate plan_tracker update with status=complete (as skills do when finishing)
+    // Simulate phase completion shorthand used by workflow skills
     await toolCallHandler(
       {
         toolCallId: "tc1",
         toolName: "plan_tracker",
-        input: { action: "update", index: 0, status: "complete" },
+        input: { action: "update", status: "complete" },
       },
       {
         hasUI: false,
@@ -45,6 +45,76 @@ describe("Phase Tracking Integration Tests", () => {
     lastState = stateEntries[stateEntries.length - 1]?.data.workflow;
     expect(lastState?.phases.brainstorm).toBe("complete");
     expect(lastState?.currentPhase).toBe("brainstorm"); // still current until next advance
+  });
+
+  test("plan_tracker task completion update (with index) does not auto-complete workflow phase", async () => {
+    const { api, handlers, appendedEntries } = createFakePi({ withAppendEntry: true });
+    workflowMonitorExtension(api as any);
+
+    const inputHandler = getSingleHandler(handlers, "input");
+    const toolCallHandler = getSingleHandler(handlers, "tool_call");
+
+    await inputHandler(
+      { text: "/skill:executing-plans" },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
+    );
+
+    await toolCallHandler(
+      {
+        toolCallId: "tc1",
+        toolName: "plan_tracker",
+        input: { action: "update", index: 0, status: "complete" },
+      },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
+    );
+
+    const stateEntries = appendedEntries.filter((e: any) => e.customType === "superpowers_state");
+    const lastState = stateEntries[stateEntries.length - 1]?.data.workflow;
+    expect(lastState?.currentPhase).toBe("execute");
+    expect(lastState?.phases.execute).toBe("active");
+  });
+
+  test("writing a generic docs/plans markdown after brainstorm advances to plan", async () => {
+    const { api, handlers, appendedEntries } = createFakePi({ withAppendEntry: true });
+    workflowMonitorExtension(api as any);
+
+    const inputHandler = getSingleHandler(handlers, "input");
+    const toolCallHandler = getSingleHandler(handlers, "tool_call");
+
+    await inputHandler(
+      { text: "/skill:brainstorming" },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
+    );
+
+    await toolCallHandler(
+      {
+        toolCallId: "tc-write-plan",
+        toolName: "write",
+        input: { path: "docs/plans/2026-03-25-sample-plan.md", content: "# Plan" },
+      },
+      {
+        hasUI: false,
+        sessionManager: { getBranch: () => [] },
+        ui: { setWidget: () => {}, select: () => {}, setEditorText: () => {}, notify: () => {} },
+      },
+    );
+
+    const stateEntries = appendedEntries.filter((e: any) => e.customType === "superpowers_state");
+    const lastState = stateEntries[stateEntries.length - 1]?.data.workflow;
+    expect(lastState?.currentPhase).toBe("plan");
+    expect(lastState?.phases.brainstorm).toBe("complete");
   });
 
   test("reading skill file does NOT advance workflow phase", async () => {
