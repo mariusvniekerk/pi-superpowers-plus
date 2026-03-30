@@ -3,7 +3,7 @@ name: writing-plans
 description: Use when you have a spec or requirements for a multi-step task, before touching code
 ---
 
-> **Related skills:** Did you `/skill:brainstorming` first? Ready to implement? Use `/skill:executing-plans` or `/skill:subagent-driven-development`.
+> **Related skills:** Did you `/skill:brainstorming` first? Ready to implement? Use `/skill:orchestrator-implements`, `/skill:subagent-driven-development`, or `/skill:executing-plans`.
 
 # Writing Plans
 
@@ -53,7 +53,7 @@ Before defining tasks, map out which files will be created or modified and what 
 ```markdown
 # [Feature Name] Implementation Plan
 
-> **For agentic workers:** REQUIRED: Use `/skill:subagent-driven-development` (preferred in-session) or `/skill:executing-plans` (parallel session) to implement this plan. Steps use checkbox syntax for tracking.
+> **For agentic workers:** REQUIRED: Use `/skill:orchestrator-implements` (in-session, orchestrator implements), `/skill:subagent-driven-development` (in-session, subagents implement), or `/skill:executing-plans` (parallel session) to implement this plan. Steps use checkbox syntax for tracking.
 
 **Goal:** [One sentence describing what this builds]
 
@@ -146,13 +146,20 @@ After saving the plan, mark the planning phase complete: call `plan_tracker` wit
 
 Then offer execution choice:
 
-**"Plan complete and saved to `docs/plans/<filename>.md`. Two execution options:**
+**"Plan complete and saved to `docs/plans/<filename>.md`. Three execution options:**
 
-**1. Subagent-Driven (this session)** - Fresh subagent per task with two-stage review. Better for plans with many independent tasks.
+**1. Orchestrator Implements (this session)** - Main LLM implements directly, subagent reviewers check quality. Best for plans that fit in context. Autonomous after start. Economical.
 
-**2. Parallel Session (separate)** - Batch execution with human review checkpoints. Better when tasks are tightly coupled or you want more control between batches.
+**2. Subagent-Driven (this session)** - Fresh subagent per task with two-stage review. Better for complex plans where implementation benefits from isolated context.
+
+**3. Parallel Session (separate)** - Batch execution with human review checkpoints. Better when tasks are tightly coupled or you want more control between batches.
 
 **Which approach?"**
+
+**If Orchestrator Implements chosen:**
+- **REQUIRED SUB-SKILL:** Use `/skill:orchestrator-implements`
+- Stay in this session
+- Orchestrator implements + subagent reviewers
 
 **If Subagent-Driven chosen:**
 - **REQUIRED SUB-SKILL:** Use `/skill:subagent-driven-development`
