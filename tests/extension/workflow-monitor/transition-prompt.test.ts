@@ -5,7 +5,7 @@ import {
   WORKFLOW_TRACKER_ENTRY_TYPE,
   WorkflowTracker,
 } from "../../../extensions/workflow-monitor/workflow-tracker";
-import { createFakePi, getSingleHandler } from "./test-helpers";
+import { createFakePi, emitSessionStart, getSingleHandler } from "./test-helpers";
 
 describe("boundary prompting", () => {
   test("prompts after brainstorm complete", () => {
@@ -55,7 +55,7 @@ describe("boundary prompting", () => {
     const fake = createFakePi({ withAppendEntry: true });
     workflowMonitorExtension(fake.api as any);
 
-    const onSessionSwitch = getSingleHandler(fake.handlers, "session_switch");
+    const onSessionStart = getSingleHandler(fake.handlers, "session_start");
     const onAgentEnd = getSingleHandler(fake.handlers, "agent_end");
 
     let agentEndSelectCalls = 0;
@@ -93,7 +93,7 @@ describe("boundary prompting", () => {
       },
     };
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
     await onAgentEnd({}, ctx);
     await onAgentEnd({}, ctx);
 
@@ -104,7 +104,7 @@ describe("boundary prompting", () => {
     const fake = createFakePi({ withAppendEntry: true });
     workflowMonitorExtension(fake.api as any);
 
-    const onSessionSwitch = getSingleHandler(fake.handlers, "session_switch");
+    const onSessionStart = getSingleHandler(fake.handlers, "session_start");
     const onAgentEnd = getSingleHandler(fake.handlers, "agent_end");
 
     const editorTexts: string[] = [];
@@ -139,7 +139,7 @@ describe("boundary prompting", () => {
       },
     };
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
     await onAgentEnd({}, ctx);
 
     const latest = fake.appendedEntries.at(-1)?.data;
@@ -153,7 +153,7 @@ describe("boundary prompting", () => {
     const fake = createFakePi({ withAppendEntry: true });
     workflowMonitorExtension(fake.api as any);
 
-    const onSessionSwitch = getSingleHandler(fake.handlers, "session_switch");
+    const onSessionStart = getSingleHandler(fake.handlers, "session_start");
     const onAgentEnd = getSingleHandler(fake.handlers, "agent_end");
 
     const editorTexts: string[] = [];
@@ -202,7 +202,7 @@ describe("boundary prompting", () => {
       },
     };
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
     await onAgentEnd({}, ctx);
 
     const latest = fake.appendedEntries.at(-1)?.data;
@@ -215,7 +215,7 @@ describe("boundary prompting", () => {
     const fake = createFakePi({ withAppendEntry: true });
     workflowMonitorExtension(fake.api as any);
 
-    const onSessionSwitch = getSingleHandler(fake.handlers, "session_switch");
+    const onSessionStart = getSingleHandler(fake.handlers, "session_start");
     const onAgentEnd = getSingleHandler(fake.handlers, "agent_end");
 
     const ctx = {
@@ -252,7 +252,7 @@ describe("boundary prompting", () => {
       },
     };
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
     await onAgentEnd({}, ctx);
   });
 
@@ -311,7 +311,7 @@ describe("boundary prompting", () => {
     const fake = createFakePi({ withAppendEntry: true });
     workflowMonitorExtension(fake.api as any);
 
-    const onSessionSwitch = getSingleHandler(fake.handlers, "session_switch");
+    const onSessionStart = getSingleHandler(fake.handlers, "session_start");
     const onAgentEnd = getSingleHandler(fake.handlers, "agent_end");
 
     const editorTexts: string[] = [];
@@ -361,7 +361,7 @@ describe("boundary prompting", () => {
       },
     };
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
     await onAgentEnd({}, ctx);
 
     const text = editorTexts.at(-1) ?? "";

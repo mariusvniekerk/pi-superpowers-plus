@@ -45,6 +45,7 @@ import {
   type WorkflowTrackerState,
 } from "./workflow-monitor/workflow-tracker";
 import { getTransitionPrompt } from "./workflow-monitor/workflow-transitions";
+import { normalizeSessionTransition } from "./shared/session-transition";
 
 type SelectOption<T extends string> = { label: string; value: T };
 
@@ -232,10 +233,18 @@ export default function (pi: ExtensionAPI) {
     review_complete: "review",
   };
 
-  // --- State reconstruction on session events ---
-  for (const event of ["session_start", "session_switch", "session_fork", "session_tree"] as const) {
-    pi.on(event, async (_event, ctx) => {
+  const handleSessionTransition = (
+    event: { type: string; reason?: string; previousSessionFile?: string },
+    ctx: ExtensionContext,
+  ) => {
+    const transition = normalizeSessionTransition(event);
+    if (!transition) return;
+
+    if (transition.shouldReconstructState) {
       reconstructState(ctx, handler);
+    }
+
+    if (transition.shouldClearEphemeralState) {
       pendingViolations.clear();
       pendingVerificationViolations.clear();
       pendingBranchGates.clear();
@@ -244,9 +253,20 @@ export default function (pi: ExtensionAPI) {
       strikes.practice = 0;
       delete sessionAllowed.process;
       delete sessionAllowed.practice;
+    }
+
+    if (transition.shouldResetBranchSafety) {
       branchNoticeShown = false;
       branchConfirmed = false;
-      updateWidget(ctx);
+    }
+
+    updateWidget(ctx);
+  };
+
+  // --- State reconstruction on session events ---
+  for (const event of ["session_start", "session_switch", "session_fork", "session_tree"] as const) {
+    pi.on(event, async (sessionEvent, ctx) => {
+      handleSessionTransition(sessionEvent, ctx);
     });
   }
 

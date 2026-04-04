@@ -10,6 +10,7 @@ import { StringEnum } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { type Static, Type } from "@sinclair/typebox";
+import { normalizeSessionTransition } from "./shared/session-transition";
 
 type TaskStatus = "pending" | "in_progress" | "complete";
 
@@ -117,11 +118,24 @@ export default function (pi: ExtensionAPI) {
     }
   };
 
+  const handleSessionTransition = (
+    event: { type: string; reason?: string; previousSessionFile?: string },
+    ctx: ExtensionContext,
+  ) => {
+    const transition = normalizeSessionTransition(event);
+    if (!transition) return;
+
+    if (transition.shouldReconstructState) {
+      reconstructState(ctx);
+    }
+
+    updateWidget(ctx);
+  };
+
   // Reconstruct state + widget on session events
   for (const event of ["session_start", "session_switch", "session_fork", "session_tree"] as const) {
-    pi.on(event, async (_event, ctx) => {
-      reconstructState(ctx);
-      updateWidget(ctx);
+    pi.on(event, async (sessionEvent, ctx) => {
+      handleSessionTransition(sessionEvent, ctx);
     });
   }
 

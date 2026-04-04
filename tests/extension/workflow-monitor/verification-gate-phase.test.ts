@@ -1,14 +1,14 @@
 import { describe, expect, test } from "vitest";
 import workflowMonitorExtension from "../../../extensions/workflow-monitor";
 import { WORKFLOW_TRACKER_ENTRY_TYPE } from "../../../extensions/workflow-monitor/workflow-tracker";
-import { createFakePi, getSingleHandler } from "./test-helpers";
+import { createFakePi, emitSessionStart, getSingleHandler } from "./test-helpers";
 
 describe("verification gate phase-awareness", () => {
   test("does not inject verification warning for git commit during brainstorm", async () => {
     const fake = createFakePi();
     workflowMonitorExtension(fake.api as any);
 
-    const onSessionSwitch = getSingleHandler(fake.handlers, "session_switch");
+    const onSessionStart = getSingleHandler(fake.handlers, "session_start");
     const onToolCall = getSingleHandler(fake.handlers, "tool_call");
     const onToolResult = getSingleHandler(fake.handlers, "tool_result");
 
@@ -38,7 +38,7 @@ describe("verification gate phase-awareness", () => {
       ui: { setWidget: () => {} },
     };
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
 
     await onToolCall({ toolCallId: "c1", toolName: "bash", input: { command: "git commit -m 'docs'" } }, ctx);
 

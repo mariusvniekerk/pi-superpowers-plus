@@ -7,7 +7,7 @@ import {
   WORKFLOW_TRACKER_ENTRY_TYPE,
   type WorkflowTrackerState,
 } from "../../../extensions/workflow-monitor/workflow-tracker";
-import { createFakePi, getSingleHandler } from "./test-helpers";
+import { createFakePi, emitSessionStart, getSingleHandler } from "./test-helpers";
 
 function createWorkflowState(
   overrides: Partial<Record<Phase, PhaseStatus>>,
@@ -52,11 +52,11 @@ async function setupExtension(_state: WorkflowTrackerState) {
   const fake = createFakePi({ withAppendEntry: true });
   workflowMonitorExtension(fake.api as any);
 
-  const onSessionSwitch = getSingleHandler(fake.handlers, "session_switch");
+  const onSessionStart = getSingleHandler(fake.handlers, "session_start");
   const onToolCall = getSingleHandler(fake.handlers, "tool_call");
   const onToolResult = getSingleHandler(fake.handlers, "tool_result");
 
-  return { fake, onSessionSwitch, onToolCall, onToolResult };
+  return { fake, onSessionStart, onToolCall, onToolResult };
 }
 
 describe("completion-action gating on bash commands", () => {
@@ -73,10 +73,10 @@ describe("completion-action gating on bash commands", () => {
       "brainstorm",
     );
 
-    const { onSessionSwitch, onToolCall } = await setupExtension(state);
+    const { onSessionStart, onToolCall } = await setupExtension(state);
     const { ctx } = createCtx(state, true, ["Do verify now"]);
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
 
     await onToolCall(
       {
@@ -102,10 +102,10 @@ describe("completion-action gating on bash commands", () => {
       },
       "execute",
     );
-    const { fake, onSessionSwitch, onToolCall } = await setupExtension(state);
+    const { fake, onSessionStart, onToolCall } = await setupExtension(state);
     const { ctx, editorTexts } = createCtx(state, true, ["Do verify now"]);
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
 
     const result = await onToolCall(
       {
@@ -135,10 +135,10 @@ describe("completion-action gating on bash commands", () => {
       },
       "execute",
     );
-    const { fake, onSessionSwitch, onToolCall, onToolResult } = await setupExtension(state);
+    const { fake, onSessionStart, onToolCall, onToolResult } = await setupExtension(state);
     const { ctx } = createCtx(state, true, ["Skip verify"]);
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
 
     const toolCallResult = await onToolCall(
       {
@@ -190,10 +190,10 @@ describe("completion-action gating on bash commands", () => {
       },
       "execute",
     );
-    const { fake, onSessionSwitch, onToolCall } = await setupExtension(state);
+    const { fake, onSessionStart, onToolCall } = await setupExtension(state);
     const { ctx } = createCtx(state, true, ["Skip all and continue"]);
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
 
     const result = await onToolCall(
       {
@@ -223,10 +223,10 @@ describe("completion-action gating on bash commands", () => {
       },
       "execute",
     );
-    const { fake, onSessionSwitch, onToolCall } = await setupExtension(state);
+    const { fake, onSessionStart, onToolCall } = await setupExtension(state);
     const { ctx } = createCtx(state, true, ["Cancel"]);
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
 
     const result = await onToolCall(
       {
@@ -252,10 +252,10 @@ describe("completion-action gating on bash commands", () => {
       },
       "execute",
     );
-    const { fake, onSessionSwitch, onToolCall, onToolResult } = await setupExtension(state);
+    const { fake, onSessionStart, onToolCall, onToolResult } = await setupExtension(state);
     const { ctx } = createCtx(state, false);
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
 
     const toolCallResult = await onToolCall(
       {
@@ -300,10 +300,10 @@ describe("completion-action gating on bash commands", () => {
       },
       "execute",
     );
-    const { onSessionSwitch, onToolCall } = await setupExtension(state);
+    const { onSessionStart, onToolCall } = await setupExtension(state);
     const { ctx } = createCtx(state, true);
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
 
     const result = await onToolCall(
       {
@@ -330,10 +330,10 @@ describe("completion-action gating on bash commands", () => {
       },
       "verify",
     );
-    const { onSessionSwitch, onToolCall } = await setupExtension(state);
+    const { onSessionStart, onToolCall } = await setupExtension(state);
     const { ctx } = createCtx(state, true);
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
 
     const result = await onToolCall(
       {
@@ -362,10 +362,10 @@ describe("completion-action gating on bash commands", () => {
       },
       "execute",
     );
-    const { onSessionSwitch, onToolCall } = await setupExtension(state);
+    const { onSessionStart, onToolCall } = await setupExtension(state);
     const { ctx } = createCtx(state, true);
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
 
     const result = await onToolCall(
       {
@@ -394,10 +394,10 @@ describe("completion-action gating on bash commands", () => {
       "execute",
     );
 
-    const { onSessionSwitch, onToolCall } = await setupExtension(state);
+    const { onSessionStart, onToolCall } = await setupExtension(state);
     const { ctx } = createCtx(state, true);
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
 
     // Simulate normal task completion update from plan_tracker
     await onToolCall(
@@ -436,11 +436,11 @@ describe("completion-action gating on bash commands", () => {
       "execute",
     );
 
-    const { onSessionSwitch, onToolCall } = await setupExtension(state);
+    const { onSessionStart, onToolCall } = await setupExtension(state);
 
     const { ctx } = createCtx(state, true, ["Skip verify"]);
 
-    await onSessionSwitch({}, ctx);
+    await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
 
     await onToolCall({ toolCallId: "tc1", toolName: "bash", input: { command: "git commit -m 'x'" } }, ctx);
 

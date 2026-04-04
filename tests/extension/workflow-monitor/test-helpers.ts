@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { afterEach, expect } from "vitest";
 
 type Handler = (event: any, ctx: any) => any;
+type SessionStartReason = "startup" | "reload" | "new" | "resume" | "fork";
 
 const ORIGINAL_CWD = process.cwd();
 const TEMP_DIRS: string[] = [];
@@ -67,4 +68,12 @@ export function getSingleHandler(handlers: Map<string, Handler[]>, event: string
 
 export function getHandlers(handlers: Map<string, Handler[]>, event: string): Handler[] {
   return handlers.get(event) ?? [];
+}
+
+export function emitSessionStart(reason: SessionStartReason, previousSessionFile?: string) {
+  return {
+    type: "session_start",
+    reason,
+    previousSessionFile,
+  };
 }
