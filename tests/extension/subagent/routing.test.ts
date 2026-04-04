@@ -90,6 +90,30 @@ describe("subagent routing", () => {
     expect(runSubprocessAgentMock).toHaveBeenCalledTimes(1);
   });
 
+  test("returns a structured error for ad-hoc implementer failures", async () => {
+    let tool: any;
+    subagentExtension({
+      registerTool: (value: unknown) => {
+        tool = value;
+      },
+      on: vi.fn(),
+      registerCommand: vi.fn(),
+      appendEntry: vi.fn(),
+    } as any);
+
+    implementerRunMock.mockRejectedValueOnce(new Error("SDK prompt failed"));
+
+    const result = await tool.execute("id", { agent: "implementer", task: "Implement feature" }, undefined, undefined, {
+      cwd: process.cwd(),
+      hasUI: false,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([{ type: "text", text: "Agent failed: SDK prompt failed" }]);
+    expect(result.details.status).toBe("failed");
+    expect(result.details.results[0].errorMessage).toBe("SDK prompt failed");
+  });
+
   test("persists workstream transitions before and after implementer runtime failures", async () => {
     let tool: any;
     const appendEntry = vi.fn();
@@ -119,6 +143,7 @@ describe("subagent routing", () => {
     expect(appendEntry).toHaveBeenCalledTimes(2);
     expect(appendEntry.mock.calls[0][1].activeWorkstreams).toHaveLength(1);
     expect(appendEntry.mock.calls[0][1].activeWorkstreams[0].taskKey).toBe("task-2");
-    expect(appendEntry.mock.calls[1][1].activeWorkstreams).toEqual([]);
+    expect(appendEntry.mock.calls[1][1].activeWorkstreams).toHaveLength(1);
+    expect(appendEntry.mock.calls[1][1].activeWorkstreams[0].taskKey).toBe("task-2");
   });
 });

@@ -13,7 +13,7 @@ import {
   SettingsManager,
 } from "@mariozechner/pi-coding-agent";
 import type { AgentConfig } from "./agents.js";
-import type { SingleResult } from "./runtime-types.js";
+import type { SingleResult, UsageStats } from "./runtime-types.js";
 import type { ImplementerWorkstreamRecord } from "./workstreams.js";
 
 function getImplementerSessionDir(cwd: string): string {
@@ -26,6 +26,35 @@ function resolveModel(agent: AgentConfig, modelRegistry: ModelRegistry): Model<A
   return modelRegistry
     .getAll()
     .find((model) => model.id === agent.model || `${model.provider}/${model.id}` === agent.model);
+}
+
+function collectUsage(messages: SingleResult["messages"]): { usage: UsageStats; model?: string } {
+  const usage: UsageStats = {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    cost: 0,
+    contextTokens: 0,
+    turns: 0,
+  };
+  let model: string | undefined;
+
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    usage.turns++;
+    if (message.usage) {
+      usage.input += message.usage.input || 0;
+      usage.output += message.usage.output || 0;
+      usage.cacheRead += message.usage.cacheRead || 0;
+      usage.cacheWrite += message.usage.cacheWrite || 0;
+      usage.cost += message.usage.cost?.total || 0;
+      usage.contextTokens = message.usage.totalTokens || usage.contextTokens;
+    }
+    if (!model && message.model) model = message.model;
+  }
+
+  return { usage, model };
 }
 
 export class ImplementerRuntime {
@@ -75,6 +104,7 @@ export class ImplementerRuntime {
     await session.prompt(`Task: ${input.task}`);
 
     const deltaMessages = session.messages.slice(startIndex).filter((message) => message.role !== "user");
+    const { usage, model } = collectUsage(deltaMessages as SingleResult["messages"]);
 
     return {
       agent: input.agent.name,
@@ -83,7 +113,8 @@ export class ImplementerRuntime {
       exitCode: 0,
       messages: deltaMessages as SingleResult["messages"],
       stderr: "",
-      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+      usage,
+      model,
       sessionFile: session.sessionFile,
     };
   }

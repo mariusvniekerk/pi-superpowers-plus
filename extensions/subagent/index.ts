@@ -341,6 +341,18 @@ export default function (pi: ExtensionAPI) {
           results,
         });
 
+      const makeFailedSingleDetails = (result: SingleResult) => ({
+        ...makeDetails("single")([result]),
+        status: "failed" as const,
+        agent: result.agent,
+        task: result.task,
+        result: "",
+        filesChanged: [],
+        testsRan: false,
+        implementerStatus: undefined,
+        tddViolations: result.tddViolations ?? 0,
+      });
+
       if (modeCount !== 1) {
         const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
         return {
@@ -539,7 +551,28 @@ export default function (pi: ExtensionAPI) {
           const taskKey = params.taskKey;
           if (!taskKey) {
             const adHoc = workstreams.create(`adhoc-${Date.now()}`, params.cwd ?? ctx.cwd);
-            const result = await implementerRuntime.run({ record: adHoc, agent, task: params.task });
+            let result: SingleResult;
+            try {
+              result = await implementerRuntime.run({ record: adHoc, agent, task: params.task });
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              implementerRuntime.dispose(adHoc.workstreamId);
+              const failedResult: SingleResult = {
+                agent: agent.name,
+                agentSource: agent.source,
+                task: params.task,
+                exitCode: 1,
+                messages: [],
+                stderr: errorMessage,
+                errorMessage,
+                usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+              };
+              return {
+                content: [{ type: "text", text: `Agent failed: ${errorMessage}` }],
+                details: makeFailedSingleDetails(failedResult),
+                isError: true,
+              };
+            }
             workstreams.complete(adHoc.workstreamId);
             implementerRuntime.dispose(adHoc.workstreamId);
             const summary = collectSummary(result.messages);
@@ -581,8 +614,6 @@ export default function (pi: ExtensionAPI) {
             result = await implementerRuntime.run({ record, agent, task: params.task });
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            workstreams.fail(record.workstreamId, errorMessage);
-            implementerRuntime.dispose(record.workstreamId);
             persistWorkstreams(pi.appendEntry.bind(pi), workstreams);
             updateImplementerStatus(ctx, workstreams);
 
@@ -599,17 +630,7 @@ export default function (pi: ExtensionAPI) {
 
             return {
               content: [{ type: "text", text: `Agent failed: ${errorMessage}` }],
-              details: {
-                ...makeDetails("single")([failedResult]),
-                status: "failed" as const,
-                agent: failedResult.agent,
-                task: failedResult.task,
-                result: "",
-                filesChanged: [],
-                testsRan: false,
-                implementerStatus: undefined,
-                tddViolations: 0,
-              },
+              details: makeFailedSingleDetails(failedResult),
               isError: true,
             };
           }

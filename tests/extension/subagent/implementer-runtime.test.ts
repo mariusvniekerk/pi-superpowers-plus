@@ -60,7 +60,12 @@ describe("ImplementerRuntime", () => {
     const session = {
       prompt: vi.fn(async () => {
         sessionMessages.push({ role: "user", content: "Task: implement feature" });
-        sessionMessages.push({ role: "assistant", content: [{ type: "text", text: "new output" }] });
+        sessionMessages.push({
+          role: "assistant",
+          content: [{ type: "text", text: "new output" }],
+          usage: { input: 10, output: 5, cacheRead: 2, cacheWrite: 1, cost: { total: 0.12 }, totalTokens: 15 },
+          model: "provider/model-a",
+        });
       }),
       get messages() {
         return sessionMessages;
@@ -91,7 +96,17 @@ describe("ImplementerRuntime", () => {
       task: "implement feature",
     });
 
-    expect(result.messages).toEqual([{ role: "assistant", content: [{ type: "text", text: "new output" }] }]);
+    expect(result.messages).toMatchObject([{ role: "assistant", content: [{ type: "text", text: "new output" }] }]);
     expect(result.sessionFile).toBe("/tmp/implementer-session.jsonl");
+    expect(result.usage).toEqual({
+      input: 10,
+      output: 5,
+      cacheRead: 2,
+      cacheWrite: 1,
+      cost: 0.12,
+      contextTokens: 15,
+      turns: 1,
+    });
+    expect(result.model).toBe("provider/model-a");
   });
 });
