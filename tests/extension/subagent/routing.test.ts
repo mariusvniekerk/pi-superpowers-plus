@@ -48,7 +48,7 @@ describe("subagent routing", () => {
 
     await tool.execute(
       "id",
-      { agent: "implementer", task: "Implement feature", taskKey: "task-2" },
+      { agent: "implementer", task: "Implement feature", taskKey: "task-2", agentScope: "both" },
       undefined,
       undefined,
       {
@@ -85,7 +85,7 @@ describe("subagent routing", () => {
 
     await tool.execute(
       "id",
-      { agent: "implementer", task: "Implement feature", taskKey: "task-2", cwd: "." },
+      { agent: "implementer", task: "Implement feature", taskKey: "task-2", cwd: ".", agentScope: "both" },
       undefined,
       undefined,
       {
@@ -118,10 +118,16 @@ describe("subagent routing", () => {
       usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
     });
 
-    await tool.execute("id", { agent: "critical-reviewer", task: "Review diff" }, undefined, undefined, {
-      cwd: process.cwd(),
-      hasUI: false,
-    });
+    await tool.execute(
+      "id",
+      { agent: "critical-reviewer", task: "Review diff", agentScope: "both" },
+      undefined,
+      undefined,
+      {
+        cwd: process.cwd(),
+        hasUI: false,
+      },
+    );
 
     expect(runSubprocessAgentMock).toHaveBeenCalledTimes(1);
   });
@@ -139,10 +145,16 @@ describe("subagent routing", () => {
 
     implementerRunMock.mockRejectedValueOnce(new Error("SDK prompt failed"));
 
-    const result = await tool.execute("id", { agent: "implementer", task: "Implement feature" }, undefined, undefined, {
-      cwd: process.cwd(),
-      hasUI: false,
-    });
+    const result = await tool.execute(
+      "id",
+      { agent: "implementer", task: "Implement feature", agentScope: "both" },
+      undefined,
+      undefined,
+      {
+        cwd: process.cwd(),
+        hasUI: false,
+      },
+    );
 
     expect(result.isError).toBe(true);
     expect(result.content).toEqual([{ type: "text", text: "Agent failed: SDK prompt failed" }]);
@@ -174,14 +186,20 @@ describe("subagent routing", () => {
       sessionFile: "/tmp/implementer-session.jsonl",
     });
 
-    await tool.execute("id", { agent: "implementer", task: "Broken follow-up" }, undefined, undefined, {
-      cwd: "/tmp/repo-a",
-      hasUI: false,
-    });
+    await tool.execute(
+      "id",
+      { agent: "implementer", task: "Broken follow-up", agentScope: "both" },
+      undefined,
+      undefined,
+      {
+        cwd: "/tmp/repo-a",
+        hasUI: false,
+      },
+    );
 
     await tool.execute(
       "id",
-      { agent: "implementer", task: "Implement feature", taskKey: "task-2" },
+      { agent: "implementer", task: "Implement feature", taskKey: "task-2", agentScope: "both" },
       undefined,
       undefined,
       {
@@ -213,7 +231,7 @@ describe("subagent routing", () => {
 
     const result = await tool.execute(
       "id",
-      { agent: "implementer", task: "Implement feature", taskKey: "task-2" },
+      { agent: "implementer", task: "Implement feature", taskKey: "task-2", agentScope: "both" },
       undefined,
       undefined,
       {
@@ -255,7 +273,7 @@ describe("subagent routing", () => {
 
     await tool.execute(
       "id",
-      { agent: "implementer", task: "Implement feature", taskKey: "task-2" },
+      { agent: "implementer", task: "Implement feature", taskKey: "task-2", agentScope: "both" },
       controller.signal,
       undefined,
       {
