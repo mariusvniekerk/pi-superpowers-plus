@@ -268,6 +268,14 @@ describe("/workflow-next", () => {
       expect.arrayContaining([expect.objectContaining({ value: "execute --done ", label: "--done" })]),
     );
 
+    expect(command.getArgumentCompletions("execute --do")).toEqual(
+      expect.arrayContaining([expect.objectContaining({ value: "execute --done ", label: "--done" })]),
+    );
+
+    expect(command.getArgumentCompletions("execute --done")).toEqual(
+      expect.arrayContaining([expect.objectContaining({ value: "execute --done ", label: "--done" })]),
+    );
+
     expect(command.getArgumentCompletions("execute --done p")).toEqual(
       expect.arrayContaining([expect.objectContaining({ value: "execute --done plan", label: "plan" })]),
     );

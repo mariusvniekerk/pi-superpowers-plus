@@ -130,11 +130,17 @@ export function getWorkflowNextArgumentCompletions(argumentPrefix: string): Auto
     description: `Target phase: ${phase}`,
   }));
 
-  const doneFlag = {
-    value: prefix.endsWith(" ") ? `${prefix}--done ` : `${prefix} --done `,
-    label: "--done",
-    description: "Declare an earlier workflow phase complete",
-  };
+  function buildDoneFlagValue(baseTokens: string[]): string {
+    return `${[...baseTokens, "--done"].join(" ")} `;
+  }
+
+  function createDoneFlagCompletion(baseTokens: string[]): AutocompleteItem {
+    return {
+      value: buildDoneFlagValue(baseTokens),
+      label: "--done",
+      description: "Declare an earlier workflow phase complete",
+    };
+  }
 
   if (trimmed.length === 0) {
     return phaseItems;
@@ -155,7 +161,7 @@ export function getWorkflowNextArgumentCompletions(argumentPrefix: string): Auto
   }
 
   if (rest.length === 0) {
-    return hasTrailingWhitespace ? [doneFlag] : [doneFlag];
+    return [createDoneFlagCompletion([targetPhase])];
   }
 
   for (let index = 0; index < rest.length; index += 1) {
@@ -171,7 +177,7 @@ export function getWorkflowNextArgumentCompletions(argumentPrefix: string): Auto
               label: phase,
               description: `Declare ${phase} complete`,
             }))
-          : [doneFlag];
+          : [createDoneFlagCompletion([targetPhase, ...rest.slice(0, index)])];
       }
 
       if (isPhase(nextToken)) {
@@ -192,11 +198,11 @@ export function getWorkflowNextArgumentCompletions(argumentPrefix: string): Auto
     }
 
     if (isLastToken && token.startsWith("--")) {
-      return "--done".startsWith(token) ? [doneFlag] : [];
+      return "--done".startsWith(token) ? [createDoneFlagCompletion([targetPhase, ...rest.slice(0, index)])] : [];
     }
 
     return [];
   }
 
-  return hasTrailingWhitespace ? [doneFlag] : [doneFlag];
+  return [createDoneFlagCompletion([targetPhase, ...rest])];
 }
