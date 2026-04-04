@@ -61,6 +61,37 @@ async function selectValue<T extends string>(
 
 const SUPERPOWERS_STATE_ENTRY_TYPE = "superpowers_state";
 
+function createEmptyWorkflowState(): WorkflowTrackerState {
+  return {
+    phases: {
+      brainstorm: "pending",
+      plan: "pending",
+      execute: "pending",
+      verify: "pending",
+      review: "pending",
+      finish: "pending",
+    },
+    currentPhase: null,
+    artifacts: {
+      brainstorm: null,
+      plan: null,
+      execute: null,
+      verify: null,
+      review: null,
+      finish: null,
+    },
+    prompted: {
+      brainstorm: false,
+      plan: false,
+      execute: false,
+      verify: false,
+      review: false,
+      finish: false,
+    },
+    declaredCompletePhases: [],
+  };
+}
+
 export function getStateFilePath(): string {
   return path.join(process.cwd(), ".pi", "superpowers-state.json");
 }
@@ -804,34 +835,7 @@ export default function (pi: ExtensionAPI) {
 
       const fallbackPrompt = getWorkflowNextFallbackPrompt(
         parsed.targetPhase,
-        handler.getWorkflowState() ?? {
-          phases: {
-            brainstorm: "pending",
-            plan: "pending",
-            execute: "pending",
-            verify: "pending",
-            review: "pending",
-            finish: "pending",
-          },
-          currentPhase: null,
-          artifacts: {
-            brainstorm: null,
-            plan: null,
-            execute: null,
-            verify: null,
-            review: null,
-            finish: null,
-          },
-          prompted: {
-            brainstorm: false,
-            plan: false,
-            execute: false,
-            verify: false,
-            review: false,
-            finish: false,
-          },
-          declaredCompletePhases: [],
-        },
+        handler.getWorkflowState() ?? createEmptyWorkflowState(),
         parsed.donePhases,
       );
 
@@ -842,16 +846,18 @@ export default function (pi: ExtensionAPI) {
           return;
         }
 
-        donePhases = [...donePhases, ...fallbackPrompt.phasesToDeclare];
-      }
-
-      if (donePhases.length > 0 && handler.declareWorkflowPhasesComplete(donePhases)) {
-        persistState();
+        if (choice === "declare_and_continue") {
+          donePhases = [...donePhases, ...fallbackPrompt.phasesToDeclare];
+        }
       }
 
       const parentSession = ctx.sessionManager.getSessionFile();
       const res = await ctx.newSession({ parentSession });
       if (res.cancelled) return;
+
+      if (donePhases.length > 0 && handler.declareWorkflowPhasesComplete(donePhases)) {
+        persistState();
+      }
 
       ctx.ui.setEditorText(buildWorkflowNextPrefill(parsed.targetPhase, parsed.artifactPath));
       ctx.ui.notify("New session ready. Submit when ready.", "info");

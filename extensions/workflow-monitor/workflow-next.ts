@@ -13,7 +13,7 @@ export interface WorkflowNextParseResult {
 
 export interface WorkflowNextFallbackPrompt {
   title: string;
-  options: Array<{ label: string; value: "continue" | "cancel" }>;
+  options: Array<{ label: string; value: "declare_and_continue" | "continue_without_declaring" | "cancel" }>;
   phasesToDeclare: Phase[];
 }
 
@@ -111,8 +111,9 @@ export function getWorkflowNextFallbackPrompt(
   return {
     title: `The earlier workflow phases appear unresolved: ${phaseList}. Mark them complete and continue?`,
     options: [
-      { label: "Yes, continue", value: "continue" },
-      { label: "No, cancel", value: "cancel" },
+      { label: "Mark earlier phases complete and continue", value: "declare_and_continue" },
+      { label: "Continue without marking earlier phases complete", value: "continue_without_declaring" },
+      { label: "Cancel", value: "cancel" },
     ],
     phasesToDeclare: unresolved,
   };
@@ -120,6 +121,7 @@ export function getWorkflowNextFallbackPrompt(
 
 export function getWorkflowNextArgumentCompletions(argumentPrefix: string): AutocompleteItem[] {
   const prefix = argumentPrefix ?? "";
+  const trimmed = prefix.trimStart();
 
   const phaseItems = WORKFLOW_PHASES.map((phase) => ({
     value: phase,
@@ -128,12 +130,12 @@ export function getWorkflowNextArgumentCompletions(argumentPrefix: string): Auto
   }));
 
   const doneFlag = {
-    value: prefix.endsWith(" ") || prefix.length === 0 ? `${prefix}--done ` : "--done ",
+    value: prefix.endsWith(" ") ? `${prefix}--done ` : `${prefix} --done `,
     label: "--done",
     description: "Declare an earlier workflow phase complete",
   };
 
-  const doneMatch = prefix.match(/^(.*--done\s+)(\S*)$/);
+  const doneMatch = prefix.match(/^(.*\s--done\s+)(\S*)$/);
   if (doneMatch) {
     const [, base, partial] = doneMatch;
     return WORKFLOW_PHASES.filter((phase) => phase.startsWith(partial)).map((phase) => ({
@@ -143,23 +145,24 @@ export function getWorkflowNextArgumentCompletions(argumentPrefix: string): Auto
     }));
   }
 
-  const partial = prefix.trim();
-  if (partial.length === 0) {
-    return [...phaseItems, doneFlag];
+  if (trimmed.length === 0) {
+    return phaseItems;
   }
 
-  if (!prefix.includes(" ")) {
-    return [
-      ...WORKFLOW_PHASES.filter((phase) => phase.startsWith(partial)).map((phase) => ({
+  if (!trimmed.includes(" ")) {
+    return WORKFLOW_PHASES.filter((phase) => phase.startsWith(trimmed)).map((phase) => ({
         value: phase,
         label: phase,
         description: `Target phase: ${phase}`,
-      })),
-      doneFlag,
-    ];
+      }));
   }
 
   if (prefix.endsWith(" ")) {
+    return [doneFlag];
+  }
+
+  const [targetPhase] = trimmed.split(/\s+/, 1);
+  if (isPhase(targetPhase)) {
     return [doneFlag];
   }
 

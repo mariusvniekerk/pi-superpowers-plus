@@ -44,7 +44,41 @@ describe("/workflow-next", () => {
     expect(calls[0][1]).toMatch(/Continue from artifact: docs\/plans\/phase\.md/);
   });
 
-  test("uses interactive fallback when earlier phases are unresolved", async () => {
+  test("does not persist explicit declarations if new session is cancelled", async () => {
+    let command: any;
+    const appendedEntries: Array<{ type: string; data: any }> = [];
+    const fakePi: any = {
+      on() {},
+      registerTool() {},
+      appendEntry(type: string, data: any) {
+        appendedEntries.push({ type, data });
+      },
+      registerCommand(_name: string, opts: any) {
+        command = opts;
+      },
+    };
+
+    workflowMonitorExtension(fakePi);
+
+    const ctx: any = {
+      hasUI: true,
+      sessionManager: { getSessionFile: () => "/tmp/session.jsonl" },
+      ui: {
+        setEditorText: () => {},
+        notify: () => {},
+        select: async () => {
+          throw new Error("select should not be called when --done is explicit");
+        },
+      },
+      newSession: async () => ({ cancelled: true }),
+    };
+
+    await command.handler("execute --done brainstorm --done plan docs/plans/phase.md", ctx);
+
+    expect(appendedEntries).toEqual([]);
+  });
+
+  test("interactive fallback can mark unresolved phases complete and continue", async () => {
     let command: any;
     const appendedEntries: Array<{ type: string; data: any }> = [];
     const fakePi: any = {
@@ -74,7 +108,7 @@ describe("/workflow-next", () => {
         setWidget: () => {},
         select: async (title: string, options: string[]) => {
           selects.push([title, options]);
-          return "Yes, continue";
+          return "Mark earlier phases complete and continue";
         },
       },
       newSession: async () => {
@@ -87,9 +121,56 @@ describe("/workflow-next", () => {
 
     expect(selects).toHaveLength(1);
     expect(selects[0]?.[0]).toMatch(/unresolved/i);
-    expect(selects[0]?.[1]).toContain("Yes, continue");
+    expect(selects[0]?.[1]).toEqual([
+      "Mark earlier phases complete and continue",
+      "Continue without marking earlier phases complete",
+      "Cancel",
+    ]);
     expect(newSessionCalls).toBe(1);
     expect(appendedEntries.at(-1)?.data?.workflow?.declaredCompletePhases).toEqual(["brainstorm", "plan"]);
+  });
+
+  test("interactive fallback can continue without marking earlier phases complete", async () => {
+    let command: any;
+    const appendedEntries: Array<{ type: string; data: any }> = [];
+    const calls: any[] = [];
+    const fakePi: any = {
+      on() {},
+      registerTool() {},
+      appendEntry(type: string, data: any) {
+        appendedEntries.push({ type, data });
+      },
+      registerCommand(_name: string, opts: any) {
+        command = opts;
+      },
+    };
+
+    workflowMonitorExtension(fakePi);
+
+    let newSessionCalls = 0;
+    const ctx: any = {
+      hasUI: true,
+      sessionManager: {
+        getSessionFile: () => "/tmp/session.jsonl",
+        getBranch: () => [],
+      },
+      ui: {
+        setEditorText: (t: string) => calls.push(["setEditorText", t]),
+        notify: () => {},
+        setWidget: () => {},
+        select: async () => "Continue without marking earlier phases complete",
+      },
+      newSession: async () => {
+        newSessionCalls += 1;
+        return { cancelled: false };
+      },
+    };
+
+    await command.handler("execute docs/plans/phase.md", ctx);
+
+    expect(newSessionCalls).toBe(1);
+    expect(appendedEntries).toEqual([]);
+    expect(calls[0][1]).toMatch(/Continue from artifact: docs\/plans\/phase\.md/);
   });
 
   test("creates new session and prefills kickoff message", async () => {
@@ -112,7 +193,7 @@ describe("/workflow-next", () => {
       ui: {
         setEditorText: (t: string) => calls.push(["setEditorText", t]),
         notify: () => {},
-        select: async () => "Yes, continue",
+        select: async () => "Mark earlier phases complete and continue",
       },
       newSession: async () => ({ cancelled: false }),
     };
@@ -159,7 +240,7 @@ describe("/workflow-next", () => {
     expect(notifications[0]?.[1]).toBe("error");
   });
 
-  test("registers argument completions for phases and --done", () => {
+  test("registers phase-first argument completions", () => {
     let command: any;
     const fakePi: any = {
       on() {},
@@ -175,12 +256,22 @@ describe("/workflow-next", () => {
     expect(command.getArgumentCompletions("")).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ value: "brainstorm", label: "brainstorm" }),
-        expect.objectContaining({ value: "--done ", label: "--done" }),
       ]),
     );
+    expect(command.getArgumentCompletions("")).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ value: "--done ", label: "--done" })]),
+    );
 
-    expect(command.getArgumentCompletions("--done p")).toEqual(
-      expect.arrayContaining([expect.objectContaining({ value: "--done plan", label: "plan" })]),
+    expect(command.getArgumentCompletions("pl")).toEqual(
+      expect.arrayContaining([expect.objectContaining({ value: "plan", label: "plan" })]),
+    );
+
+    expect(command.getArgumentCompletions("execute ")).toEqual(
+      expect.arrayContaining([expect.objectContaining({ value: "execute --done ", label: "--done" })]),
+    );
+
+    expect(command.getArgumentCompletions("execute --done p")).toEqual(
+      expect.arrayContaining([expect.objectContaining({ value: "execute --done plan", label: "plan" })]),
     );
   });
 });
