@@ -187,7 +187,12 @@ Fallback review outcomes follow the same action matrix.
 Use the `subagent` tool directly with the template text filled in:
 
 ```ts
-subagent({ agent: "implementer", task: "... full implementer prompt text ..." })
+subagent({
+  agent: "implementer",
+  taskKey: "task-2",
+  workstreamMode: "auto",
+  task: "... full implementer prompt text ..."
+})
 ```
 
 ```ts
@@ -196,6 +201,20 @@ subagent({ agent: "quality-spec-reviewer", agentScope: "both", task: "... full q
 
 ```ts
 subagent({ agent: "critical-reviewer", agentScope: "both", task: "... full critical/safety review prompt text ..." })
+```
+
+For implementer dispatches, always pass a stable `taskKey` for the current plan task. Use the same `taskKey` for follow-up fixes inside that task so the implementer workstream can retain task-local context.
+
+If the active implementer has accumulated bad context for the same task, rotate it explicitly:
+
+```ts
+subagent({
+  agent: "implementer",
+  taskKey: "task-2",
+  workstreamMode: "rotate",
+  rotationReason: "scope drift after reviewer feedback",
+  task: "... full implementer prompt text ..."
+})
 ```
 
 ## Handling Implementer Status

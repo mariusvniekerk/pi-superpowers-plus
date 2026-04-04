@@ -27,4 +27,15 @@ describe("subagent structured summary", () => {
 
     expect(summary.implementerStatus).toBe("DONE_WITH_CONCERNS");
   });
+
+  test("accepts file_path in write/edit tool calls", () => {
+    const summary = __internal.collectSummary([
+      {
+        role: "assistant",
+        content: [{ type: "toolCall", name: "write", arguments: { file_path: "src/file.ts", content: "x" } }],
+      },
+    ] as any);
+
+    expect(summary.filesChanged).toEqual(["src/file.ts"]);
+  });
 });

@@ -1,8 +1,9 @@
 /**
  * Subagent Tool - Delegate tasks to specialized agents
  *
- * Spawns a separate `pi` process for each subagent invocation,
- * giving it an isolated context window.
+ * Uses a hybrid runtime:
+ *   - implementers can reuse persistent in-process workstreams keyed by task
+ *   - reviewers and multi-agent flows still run in isolated `pi` subprocesses
  *
  * Supports three modes:
  *   - Single: { agent: "name", task: "..." }
@@ -12,8 +13,6 @@
  * Uses JSON mode to capture structured output from subagents.
  */
 
-import { spawn } from "node:child_process";
-import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
@@ -22,16 +21,18 @@ import { StringEnum } from "@mariozechner/pi-ai";
 import { type ExtensionAPI, getMarkdownTheme } from "@mariozechner/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { log } from "../logging.js";
 import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.js";
 import { getSubagentConcurrency, Semaphore } from "./concurrency.js";
-import { buildSubagentEnv } from "./env.js";
+import { ImplementerRuntime } from "./implementer-runtime.js";
 import { ProcessTracker } from "./lifecycle.js";
-import { getSubagentTimeoutMs } from "./timeout.js";
+import { persistWorkstreams, restoreWorkstreamsFromBranch } from "./persistence.js";
+import { collectSummary, parseImplementerStatus, type SingleResult } from "./runtime-types.js";
+import { runSubprocessAgent, INACTIVITY_TIMEOUT_MS as SUBPROCESS_INACTIVITY_TIMEOUT_MS } from "./subprocess-runtime.js";
+import { ImplementerWorkstreamRegistry } from "./workstreams.js";
 
 const MAX_PARALLEL_TASKS = 8;
 const COLLAPSED_ITEM_COUNT = 10;
-export const INACTIVITY_TIMEOUT_MS = 480_000;
+export const INACTIVITY_TIMEOUT_MS = SUBPROCESS_INACTIVITY_TIMEOUT_MS;
 
 function formatTokens(count: number): string {
   if (count < 1000) return count.toString();
@@ -133,31 +134,6 @@ function formatToolCall(
   }
 }
 
-interface UsageStats {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  cost: number;
-  contextTokens: number;
-  turns: number;
-}
-
-interface SingleResult {
-  agent: string;
-  agentSource: "user" | "project" | "unknown";
-  task: string;
-  exitCode: number;
-  messages: Message[];
-  stderr: string;
-  usage: UsageStats;
-  model?: string;
-  stopReason?: string;
-  errorMessage?: string;
-  tddViolations?: number;
-  step?: number;
-}
-
 interface SubagentDetails {
   mode: "single" | "parallel" | "chain";
   agentScope: AgentScope;
@@ -193,57 +169,6 @@ function getDisplayItems(messages: Message[]): DisplayItem[] {
   return items;
 }
 
-function isTestCommand(cmd: string): boolean {
-  return (
-    /\bvitest\b/.test(cmd) ||
-    /\bpytest\b/.test(cmd) ||
-    /\bnpm\s+test\b/.test(cmd) ||
-    /\bpnpm\s+test\b/.test(cmd) ||
-    /\byarn\s+test\b/.test(cmd)
-  );
-}
-
-type ImplementerStatus = "DONE" | "DONE_WITH_CONCERNS" | "BLOCKED" | "NEEDS_CONTEXT";
-
-function parseImplementerStatus(text: string): ImplementerStatus | undefined {
-  const match = text.match(/(?:\*\*)?Status:(?:\*\*)?\s*(DONE_WITH_CONCERNS|DONE|BLOCKED|NEEDS_CONTEXT)\b/i);
-  if (!match) return undefined;
-  return match[1].toUpperCase() as ImplementerStatus;
-}
-
-function collectSummary(messages: Message[]): {
-  filesChanged: string[];
-  testsRan: boolean;
-  implementerStatus?: ImplementerStatus;
-} {
-  const files = new Set<string>();
-  let testsRan = false;
-  let implementerStatus: ImplementerStatus | undefined;
-
-  for (const msg of messages) {
-    if (msg.role !== "assistant") continue;
-    for (const part of msg.content) {
-      if (part.type === "text" && !implementerStatus) {
-        implementerStatus = parseImplementerStatus(part.text);
-        continue;
-      }
-      if (part.type !== "toolCall") continue;
-      // biome-ignore lint/suspicious/noExplicitAny: pi SDK message content type
-      if ((part.name === "write" || part.name === "edit") && typeof (part.arguments as any)?.path === "string") {
-        // biome-ignore lint/suspicious/noExplicitAny: pi SDK message content type
-        files.add((part.arguments as any).path);
-      }
-      if (part.name === "bash") {
-        // biome-ignore lint/suspicious/noExplicitAny: pi SDK message content type
-        const cmd = (part.arguments as any)?.command;
-        if (typeof cmd === "string" && isTestCommand(cmd)) testsRan = true;
-      }
-    }
-  }
-
-  return { filesChanged: Array.from(files), testsRan, implementerStatus };
-}
-
 export const __internal = { collectSummary, parseImplementerStatus };
 
 async function mapWithConcurrencyLimit<TIn, TOut>(
@@ -266,14 +191,32 @@ async function mapWithConcurrencyLimit<TIn, TOut>(
   return results;
 }
 
-function writePromptToTempFile(tmpDir: string, agentName: string, prompt: string): { filePath: string } {
-  const safeName = agentName.replace(/[^\w.-]+/g, "_");
-  const filePath = path.join(tmpDir, `prompt-${safeName}.md`);
-  fs.writeFileSync(filePath, prompt, { encoding: "utf-8", mode: 0o600 });
-  return { filePath };
+type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
+
+function updateImplementerStatus(
+  ctx: { hasUI?: boolean; ui?: { setStatus(id: string, text: string | undefined): void }; cwd?: string },
+  registry: ImplementerWorkstreamRegistry,
+): void {
+  if (!ctx.hasUI || !ctx.ui) return;
+  const activeWorkstreams = registry.listActive();
+  if (activeWorkstreams.length === 0) {
+    ctx.ui.setStatus("subagent", undefined);
+    return;
+  }
+  const currentCwd = typeof ctx.cwd === "string" ? path.resolve(ctx.cwd) : undefined;
+  const active =
+    (currentCwd ? activeWorkstreams.find((item) => item.cwd === currentCwd) : undefined) ??
+    (activeWorkstreams.length === 1 ? activeWorkstreams[0] : undefined);
+  if (!active) {
+    ctx.ui.setStatus("subagent", `Implementer: ${activeWorkstreams.length} active`);
+    return;
+  }
+  ctx.ui.setStatus("subagent", `Implementer: ${active.taskKey} active`);
 }
 
-type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
+function resolveAgentCwd(defaultCwd: string, cwd: string | undefined): string {
+  return cwd ? path.resolve(defaultCwd, cwd) : path.resolve(defaultCwd);
+}
 
 async function runSingleAgent(
   defaultCwd: string,
@@ -303,256 +246,24 @@ async function runSingleAgent(
       step,
     };
   }
-
-  const args: string[] = ["--mode", "json", "-p", "--no-session"];
-  if (agent.model) args.push("--model", agent.model);
-  if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
-  if (agent.extensions) {
-    for (const ext of agent.extensions) {
-      args.push("--extension", path.resolve(path.dirname(agent.filePath), ext));
-    }
-  }
-
-  let tmpDir: string | null = null;
-  let tmpPromptPath: string | null = null;
-  let tddViolationsPath: string | null = null;
-  let tddViolations = 0;
-
-  const currentResult: SingleResult = {
-    agent: agentName,
-    agentSource: agent.source,
+  return runSubprocessAgent({
+    defaultCwd,
+    agent,
     task,
-    exitCode: 0,
-    messages: [],
-    stderr: "",
-    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-    model: agent.model,
+    cwd,
     step,
-  };
-
-  const emitUpdate = () => {
-    if (onUpdate) {
-      onUpdate({
-        content: [{ type: "text", text: getFinalOutput(currentResult.messages) || "(running...)" }],
-        details: makeDetails([currentResult]),
-      });
-    }
-  };
-
-  if (semaphore.active >= semaphore.limit) {
-    log.debug(`Subagent queued — ${semaphore.active}/${semaphore.limit} slots in use`);
-  }
-  const release = await semaphore.acquire();
-  try {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-subagent-"));
-    tddViolationsPath = path.join(tmpDir, "tdd-violations.txt");
-    if (agent.systemPrompt.trim()) {
-      const tmp = writePromptToTempFile(tmpDir, agent.name, agent.systemPrompt);
-      tmpPromptPath = tmp.filePath;
-      args.push("--append-system-prompt", tmpPromptPath);
-    }
-
-    args.push(`Task: ${task}`);
-
-    const resolvedCwd = path.resolve(cwd ?? defaultCwd);
-    let cwdError: string | undefined;
-    try {
-      const stat = fs.statSync(resolvedCwd);
-      if (!stat.isDirectory()) cwdError = `Subagent cwd is not a directory: ${resolvedCwd}`;
-    } catch {
-      cwdError = `Subagent cwd does not exist: ${resolvedCwd}`;
-    }
-    if (cwdError) {
-      return {
-        agent: agentName,
-        agentSource: agent.source,
-        task,
-        exitCode: 1,
-        messages: [],
-        stderr: cwdError,
-        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-        step,
-        errorMessage: cwdError,
-      };
-    }
-
-    let wasAborted = false;
-
-    const exitCode = await new Promise<number>((resolve) => {
-      const proc = spawn("pi", args, {
-        cwd: resolvedCwd,
-        shell: false,
-        stdio: ["ignore", "pipe", "pipe"],
-        env: buildSubagentEnv(tddViolationsPath ? { PI_TDD_GUARD_VIOLATIONS_FILE: tddViolationsPath } : undefined),
-      });
-      processTracker.add(proc);
-      let buffer = "";
-      let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
-      let absoluteTimer: ReturnType<typeof setTimeout> | null = null;
-      let exitResolved = false;
-
-      const resolveOnce = (code: number) => {
-        if (exitResolved) return;
-        exitResolved = true;
-        if (inactivityTimer) clearTimeout(inactivityTimer);
-        if (absoluteTimer) clearTimeout(absoluteTimer);
-        resolve(code);
-      };
-
-      let resetInactivityTimer = () => {};
-
-      const processLine = (line: string) => {
-        if (!line.trim()) return;
-        // biome-ignore lint/suspicious/noExplicitAny: pi SDK JSON event type
-        let event: any;
-        try {
-          event = JSON.parse(line);
-        } catch (_err) {
-          log.debug(`Ignoring non-JSON line from subagent stdout: ${line.slice(0, 120)}`);
-          return;
+    signal,
+    processTracker,
+    semaphore,
+    onUpdate: onUpdate
+      ? (currentResult) => {
+          onUpdate({
+            content: [{ type: "text", text: getFinalOutput(currentResult.messages) || "(running...)" }],
+            details: makeDetails([currentResult]),
+          });
         }
-
-        if (event.type === "message_end" && event.message) {
-          const msg = event.message as Message;
-          currentResult.messages.push(msg);
-
-          if (msg.role === "assistant") {
-            currentResult.usage.turns++;
-            const usage = msg.usage;
-            if (usage) {
-              currentResult.usage.input += usage.input || 0;
-              currentResult.usage.output += usage.output || 0;
-              currentResult.usage.cacheRead += usage.cacheRead || 0;
-              currentResult.usage.cacheWrite += usage.cacheWrite || 0;
-              currentResult.usage.cost += usage.cost?.total || 0;
-              currentResult.usage.contextTokens = usage.totalTokens || 0;
-            }
-            if (!currentResult.model && msg.model) currentResult.model = msg.model;
-            if (msg.stopReason) currentResult.stopReason = msg.stopReason;
-            if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
-          }
-          emitUpdate();
-          resetInactivityTimer();
-        }
-
-        if (event.type === "tool_result_end" && event.message) {
-          currentResult.messages.push(event.message as Message);
-          emitUpdate();
-        }
-      };
-
-      resetInactivityTimer = () => {
-        if (inactivityTimer) clearTimeout(inactivityTimer);
-        inactivityTimer = setTimeout(() => {
-          if (exitResolved) return;
-          log.debug(`Subagent killed after ${INACTIVITY_TIMEOUT_MS}ms of inactivity`);
-          currentResult.errorMessage = `Subagent killed after ${INACTIVITY_TIMEOUT_MS / 1000}s of inactivity`;
-          if (buffer.trim()) processLine(buffer);
-          proc.kill("SIGTERM");
-          setTimeout(() => {
-            try {
-              proc.kill("SIGKILL");
-            } catch {
-              /* already exited */
-            }
-          }, 5000);
-          resolveOnce(1);
-        }, INACTIVITY_TIMEOUT_MS);
-      };
-
-      resetInactivityTimer();
-
-      // Absolute timeout — kills regardless of activity
-      const absoluteTimeoutMs = getSubagentTimeoutMs(agent.timeout);
-      absoluteTimer = setTimeout(() => {
-        if (exitResolved) return;
-        const seconds = Math.round(absoluteTimeoutMs / 1000);
-        log.debug(`Subagent killed after ${seconds}s absolute timeout`);
-        currentResult.errorMessage = `Subagent timed out after ${seconds}s`;
-        if (buffer.trim()) processLine(buffer);
-        proc.kill("SIGTERM");
-        setTimeout(() => {
-          try {
-            proc.kill("SIGKILL");
-          } catch {
-            /* already exited */
-          }
-        }, 5000);
-        resolveOnce(1);
-      }, absoluteTimeoutMs);
-
-      proc.stdout.on("data", (data) => {
-        buffer += data.toString();
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) processLine(line);
-      });
-
-      proc.stderr.on("data", (data) => {
-        currentResult.stderr += data.toString();
-      });
-
-      proc.on("exit", (code) => {
-        processTracker.remove(proc);
-        if (exitResolved) return;
-        if (inactivityTimer) clearTimeout(inactivityTimer);
-        // Wait for any remaining stdout data to arrive after process exit, then drain.
-        // 2s is generous for local I/O; the process has already exited at this point.
-        setTimeout(() => {
-          if (buffer.trim()) processLine(buffer);
-          resolveOnce(code ?? 0);
-        }, 2000);
-      });
-
-      proc.on("error", () => {
-        processTracker.remove(proc);
-        if (inactivityTimer) clearTimeout(inactivityTimer);
-        resolveOnce(1);
-      });
-
-      if (signal) {
-        const killProc = () => {
-          wasAborted = true;
-          proc.kill("SIGTERM");
-          setTimeout(() => {
-            try {
-              proc.kill("SIGKILL");
-            } catch {
-              /* already exited */
-            }
-          }, 5000);
-        };
-        if (signal.aborted) killProc();
-        else signal.addEventListener("abort", killProc, { once: true });
-      }
-    });
-
-    currentResult.exitCode = exitCode;
-    if (tddViolationsPath && fs.existsSync(tddViolationsPath)) {
-      const raw = fs.readFileSync(tddViolationsPath, "utf-8").trim();
-      const parsed = Number.parseInt(raw || "0", 10);
-      tddViolations = Number.isFinite(parsed) ? parsed : 0;
-    }
-    currentResult.tddViolations = tddViolations;
-    if (wasAborted) throw new Error("Subagent was aborted");
-    return currentResult;
-  } finally {
-    release();
-    if (tmpPromptPath)
-      try {
-        fs.unlinkSync(tmpPromptPath);
-      } catch (err) {
-        log.debug(
-          `Failed to clean up temp prompt file: ${tmpPromptPath} — ${err instanceof Error ? err.message : err}`,
-        );
-      }
-    if (tmpDir)
-      try {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-      } catch (err) {
-        log.debug(`Failed to clean up temp directory: ${tmpDir} — ${err instanceof Error ? err.message : err}`);
-      }
-  }
+      : undefined,
+  });
 }
 
 const TaskItem = Type.Object({
@@ -572,9 +283,18 @@ const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
   default: "user",
 });
 
+const WorkstreamModeSchema = StringEnum(["auto", "fresh", "rotate"] as const, {
+  description:
+    "Implementer workstream behavior. auto = reuse active task workstream, fresh = force new, rotate = replace active workstream.",
+  default: "auto",
+});
+
 const SubagentParams = Type.Object({
   agent: Type.Optional(Type.String({ description: "Name of the agent to invoke (for single mode)" })),
   task: Type.Optional(Type.String({ description: "Task to delegate (for single mode)" })),
+  taskKey: Type.Optional(Type.String({ description: "Stable task identity for implementer workstream reuse" })),
+  workstreamMode: Type.Optional(WorkstreamModeSchema),
+  rotationReason: Type.Optional(Type.String({ description: "Reason for rotating the active implementer workstream" })),
   tasks: Type.Optional(Type.Array(TaskItem, { description: "Array of {agent, task} for parallel execution" })),
   chain: Type.Optional(Type.Array(ChainItem, { description: "Array of {agent, task} for sequential execution" })),
   agentScope: Type.Optional(AgentScopeSchema),
@@ -587,8 +307,21 @@ const SubagentParams = Type.Object({
 export default function (pi: ExtensionAPI) {
   const processTracker = new ProcessTracker();
   const semaphore = new Semaphore(getSubagentConcurrency());
+  const implementerRuntime = new ImplementerRuntime();
+  const workstreams = new ImplementerWorkstreamRegistry();
 
   process.on("exit", () => processTracker.killAll());
+
+  pi.on("session_start", async (_event, ctx) => {
+    const restored = restoreWorkstreamsFromBranch(ctx.sessionManager.getBranch());
+    workstreams.replaceAll(restored.list());
+    updateImplementerStatus(ctx, workstreams);
+  });
+
+  pi.on("session_shutdown", async (_event, ctx) => {
+    implementerRuntime.disposeAll();
+    updateImplementerStatus(ctx, workstreams);
+  });
 
   pi.registerTool({
     name: "subagent",
@@ -620,6 +353,18 @@ export default function (pi: ExtensionAPI) {
           projectAgentsDir: discovery.projectAgentsDir,
           results,
         });
+
+      const makeFailedSingleDetails = (result: SingleResult) => ({
+        ...makeDetails("single")([result]),
+        status: "failed" as const,
+        agent: result.agent,
+        task: result.task,
+        result: "",
+        filesChanged: [],
+        testsRan: false,
+        implementerStatus: undefined,
+        tddViolations: result.tddViolations ?? 0,
+      });
 
       if (modeCount !== 1) {
         const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
@@ -796,6 +541,141 @@ export default function (pi: ExtensionAPI) {
       }
 
       if (params.agent && params.task) {
+        if (params.agent === "implementer") {
+          const agent = agents.find((a) => a.name === params.agent);
+          if (!agent) {
+            const available = agents.map((a) => `"${a.name}"`).join(", ") || "none";
+            const result: SingleResult = {
+              agent: params.agent,
+              agentSource: "unknown",
+              task: params.task,
+              exitCode: 1,
+              messages: [],
+              stderr: `Unknown agent: "${params.agent}". Available agents: ${available}.`,
+              usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+            };
+            return {
+              content: [{ type: "text", text: result.stderr }],
+              details: makeDetails("single")([result]),
+              isError: true,
+            };
+          }
+
+          const taskKey = params.taskKey;
+          const resolvedImplementerCwd = resolveAgentCwd(ctx.cwd, params.cwd);
+          if (!taskKey) {
+            const adHoc = workstreams.create(`adhoc-${Date.now()}`, resolvedImplementerCwd);
+            let result: SingleResult;
+            try {
+              result = await implementerRuntime.run({ record: adHoc, agent, task: params.task, signal });
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              workstreams.complete(adHoc.workstreamId);
+              implementerRuntime.dispose(adHoc.workstreamId);
+              const failedResult: SingleResult = {
+                agent: agent.name,
+                agentSource: agent.source,
+                task: params.task,
+                exitCode: 1,
+                messages: [],
+                stderr: errorMessage,
+                errorMessage,
+                usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+              };
+              return {
+                content: [{ type: "text", text: `Agent failed: ${errorMessage}` }],
+                details: makeFailedSingleDetails(failedResult),
+                isError: true,
+              };
+            }
+            workstreams.complete(adHoc.workstreamId);
+            implementerRuntime.dispose(adHoc.workstreamId);
+            const summary = collectSummary(result.messages);
+            return {
+              content: [{ type: "text", text: getFinalOutput(result.messages) || "(no output)" }],
+              details: {
+                ...makeDetails("single")([result]),
+                status: "completed" as const,
+                agent: result.agent,
+                task: result.task,
+                result: getFinalOutput(result.messages),
+                filesChanged: summary.filesChanged,
+                testsRan: summary.testsRan,
+                implementerStatus: summary.implementerStatus,
+                tddViolations: result.tddViolations ?? 0,
+              },
+            };
+          }
+
+          const activeBefore = new Set(workstreams.listActive().map((item) => item.workstreamId));
+          const record = workstreams.acquire({
+            taskKey,
+            cwd: resolvedImplementerCwd,
+            mode: params.workstreamMode ?? "auto",
+            rotationReason: params.rotationReason,
+          });
+
+          for (const workstreamId of activeBefore) {
+            if (workstreamId !== record.workstreamId && workstreams.get(workstreamId)?.status !== "active") {
+              implementerRuntime.dispose(workstreamId);
+            }
+          }
+
+          persistWorkstreams(pi.appendEntry.bind(pi), workstreams);
+          updateImplementerStatus(ctx, workstreams);
+
+          let result: SingleResult;
+          try {
+            result = await implementerRuntime.run({ record, agent, task: params.task, signal });
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            persistWorkstreams(pi.appendEntry.bind(pi), workstreams);
+            updateImplementerStatus(ctx, workstreams);
+
+            const failedResult: SingleResult = {
+              agent: agent.name,
+              agentSource: agent.source,
+              task: params.task,
+              exitCode: 1,
+              messages: [],
+              stderr: errorMessage,
+              errorMessage,
+              usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+            };
+
+            return {
+              content: [{ type: "text", text: `Agent failed: ${errorMessage}` }],
+              details: makeFailedSingleDetails(failedResult),
+              isError: true,
+            };
+          }
+
+          if (result.sessionFile) {
+            workstreams.setSessionFile(record.workstreamId, result.sessionFile);
+            persistWorkstreams(pi.appendEntry.bind(pi), workstreams);
+          }
+
+          const summary = collectSummary(result.messages);
+          const stableDetails = {
+            ...makeDetails("single")([result]),
+            status:
+              result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted"
+                ? ("failed" as const)
+                : ("completed" as const),
+            agent: result.agent,
+            task: result.task,
+            result: getFinalOutput(result.messages),
+            filesChanged: summary.filesChanged,
+            testsRan: summary.testsRan,
+            implementerStatus: summary.implementerStatus,
+            tddViolations: result.tddViolations ?? 0,
+          };
+          return {
+            content: [{ type: "text", text: getFinalOutput(result.messages) || "(no output)" }],
+            details: stableDetails,
+          };
+        }
+
         const result = await runSingleAgent(
           ctx.cwd,
           agents,

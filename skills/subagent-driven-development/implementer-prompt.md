@@ -2,6 +2,8 @@
 
 Use this template when dispatching an implementer subagent.
 
+When dispatching the implementer, the orchestrator may reuse the same workstream for this task. That means follow-up prompts can assume prior task-local context is available. Do not assume context from other tasks.
+
 ```
 Dispatch a subagent with this prompt:
   description: "Implement Task N: [task name]"
@@ -15,6 +17,12 @@ Dispatch a subagent with this prompt:
     ## Context
 
     [Scene-setting: where this fits, dependencies, architectural context]
+
+    ## Workstream Context
+
+    This implementer workstream is scoped to Task N only.
+    Reuse context from earlier prompts in this same task when helpful.
+    Do not assume requirements or decisions from other tasks unless repeated here.
 
     ## Before You Begin
 

@@ -12,7 +12,7 @@ Your coding agent doesn't just know the rules - it follows them. Skills teach th
 
 **3 extensions** that run silently in the background:
 - **Workflow Monitor** — warns on TDD violations, tracks debug cycles, gates commits on verification, tracks workflow phase, and serves reference content on demand.
-- **Subagent** — registers a `subagent` tool for dispatching implementation and review work to isolated subprocess agents, with bundled agent definitions and structured results.
+- **Subagent** — registers a `subagent` tool for dispatching implementation and review work with bundled agent definitions, structured results, persistent implementer workstreams, and fresh reviewer sessions.
 - **Plan Tracker** — tracks task progress with a TUI widget.
 
 **After installation**:
@@ -74,6 +74,8 @@ If you're currently using [`pi-superpowers`](https://github.com/coctostan/pi-sup
 - **Plan review loop in writing-plans** — plan chunks can be reviewed for completeness, scope, and file structure before execution
 - **Architecture-aware planning guidance** — scope checks, file-structure planning, and isolation guidance imported from upstream 5.x
 - **Stronger subagent protocol** — implementers now report `DONE`, `DONE_WITH_CONCERNS`, `BLOCKED`, or `NEEDS_CONTEXT`
+- **Persistent implementer workstreams** — implementers can now retain task-local context across follow-up rounds when the orchestrator supplies a stable `taskKey`
+- **Fresh reviewer sessions** — reviewer runs remain isolated by design so review stays independent from prior implementation conversation
 - **Debug enforcement** escalation after repeated failing tests
 - **Verification gating** for `git commit` / `git push` / `gh pr create` until passing tests are run (suppressed during active plan execution)
 - **Workflow tracking + boundary prompts** (and `/workflow-next` handoff)
