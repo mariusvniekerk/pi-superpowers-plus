@@ -229,4 +229,41 @@ describe("subagent routing", () => {
     expect(appendEntry.mock.calls[1][1].activeWorkstreams).toHaveLength(1);
     expect(appendEntry.mock.calls[1][1].activeWorkstreams[0].taskKey).toBe("task-2");
   });
+
+  test("passes the tool abort signal into the implementer runtime", async () => {
+    let tool: any;
+    subagentExtension({
+      registerTool: (value: unknown) => {
+        tool = value;
+      },
+      on: vi.fn(),
+      registerCommand: vi.fn(),
+      appendEntry: vi.fn(),
+    } as any);
+
+    const controller = new AbortController();
+    implementerRunMock.mockResolvedValueOnce({
+      agent: "implementer",
+      agentSource: "project",
+      task: "Implement feature",
+      exitCode: 0,
+      messages: [],
+      stderr: "",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+      sessionFile: "/tmp/implementer-session.jsonl",
+    });
+
+    await tool.execute(
+      "id",
+      { agent: "implementer", task: "Implement feature", taskKey: "task-2" },
+      controller.signal,
+      undefined,
+      {
+        cwd: process.cwd(),
+        hasUI: false,
+      },
+    );
+
+    expect(implementerRunMock.mock.calls.at(-1)?.[0].signal).toBe(controller.signal);
+  });
 });

@@ -57,6 +57,27 @@ function collectUsage(messages: SingleResult["messages"]): { usage: UsageStats; 
   return { usage, model };
 }
 
+function collectTerminalState(messages: SingleResult["messages"]): {
+  stopReason?: SingleResult["stopReason"];
+  errorMessage?: string;
+  exitCode: number;
+} {
+  let stopReason: SingleResult["stopReason"];
+  let errorMessage: string | undefined;
+
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    if (message.stopReason) stopReason = message.stopReason;
+    if (message.errorMessage) errorMessage = message.errorMessage;
+  }
+
+  return {
+    stopReason,
+    errorMessage,
+    exitCode: stopReason === "error" || stopReason === "aborted" ? 1 : 0,
+  };
+}
+
 export class ImplementerRuntime {
   private sessions = new Map<string, AgentSession>();
 
@@ -98,23 +119,43 @@ export class ImplementerRuntime {
     return session;
   }
 
-  async run(input: { record: ImplementerWorkstreamRecord; agent: AgentConfig; task: string }): Promise<SingleResult> {
+  async run(input: {
+    record: ImplementerWorkstreamRecord;
+    agent: AgentConfig;
+    task: string;
+    signal?: AbortSignal;
+  }): Promise<SingleResult> {
     const session = await this.getOrCreateSession(input.record, input.agent);
     const startIndex = session.messages.length;
-    await session.prompt(`Task: ${input.task}`);
+    const abortSession = () => {
+      void session.abort();
+    };
+    if (input.signal?.aborted) {
+      abortSession();
+      throw new Error("Implementer was aborted");
+    }
+    input.signal?.addEventListener("abort", abortSession, { once: true });
+    try {
+      await session.prompt(`Task: ${input.task}`);
+    } finally {
+      input.signal?.removeEventListener("abort", abortSession);
+    }
 
     const deltaMessages = session.messages.slice(startIndex).filter((message) => message.role !== "user");
     const { usage, model } = collectUsage(deltaMessages as SingleResult["messages"]);
+    const { stopReason, errorMessage, exitCode } = collectTerminalState(deltaMessages as SingleResult["messages"]);
 
     return {
       agent: input.agent.name,
       agentSource: input.agent.source,
       task: input.task,
-      exitCode: 0,
+      exitCode,
       messages: deltaMessages as SingleResult["messages"],
       stderr: "",
       usage,
       model,
+      stopReason,
+      errorMessage,
       sessionFile: session.sessionFile,
     };
   }

@@ -105,7 +105,7 @@ export async function runSubprocessAgent({
 
     args.push(`Task: ${task}`);
 
-    const resolvedCwd = path.resolve(cwd ?? defaultCwd);
+    const resolvedCwd = cwd ? path.resolve(defaultCwd, cwd) : path.resolve(defaultCwd);
     let cwdError: string | undefined;
     try {
       const stat = fs.statSync(resolvedCwd);

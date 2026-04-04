@@ -1,5 +1,8 @@
+import * as fs from "node:fs";
 import { EventEmitter } from "node:events";
-import { describe, expect, test, vi } from "vitest";
+import * as os from "node:os";
+import * as path from "node:path";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -24,6 +27,10 @@ function createFakeProcess() {
 }
 
 describe("runSubprocessAgent", () => {
+  beforeEach(() => {
+    spawnMock.mockReset();
+  });
+
   test("returns cwd error before spawning when directory does not exist", async () => {
     const result = await runSubprocessAgent({
       defaultCwd: process.cwd(),
@@ -84,5 +91,34 @@ describe("runSubprocessAgent", () => {
     expect(onUpdate).toHaveBeenCalledTimes(1);
     expect(onUpdate.mock.calls[0][0].messages).toHaveLength(1);
     expect(result.messages).toHaveLength(1);
+  });
+
+  test("resolves relative cwd against the provided default cwd", async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "subprocess-runtime-test-"));
+    const proc = createFakeProcess();
+    spawnMock.mockReturnValue(proc);
+
+    const promise = runSubprocessAgent({
+      defaultCwd: workspace,
+      agent: {
+        name: "critical-reviewer",
+        source: "project",
+        filePath: "/tmp/critical.md",
+        systemPrompt: "",
+      } as any,
+      task: "review diff",
+      cwd: ".",
+      processTracker: { add() {}, remove() {} } as any,
+      semaphore: { active: 0, limit: 1, acquire: async () => () => {} } as any,
+    });
+
+    queueMicrotask(() => {
+      proc.emit("exit", 0);
+    });
+
+    await promise;
+
+    expect(spawnMock.mock.calls[0][2].cwd).toBe(workspace);
+    fs.rmSync(workspace, { recursive: true, force: true });
   });
 });

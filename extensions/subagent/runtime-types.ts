@@ -61,10 +61,10 @@ export function collectSummary(messages: Message[]): {
         continue;
       }
       if (part.type !== "toolCall") continue;
-      // biome-ignore lint/suspicious/noExplicitAny: pi SDK message content type
-      if ((part.name === "write" || part.name === "edit") && typeof (part.arguments as any)?.path === "string") {
+      if (part.name === "write" || part.name === "edit") {
         // biome-ignore lint/suspicious/noExplicitAny: pi SDK message content type
-        files.add((part.arguments as any).path);
+        const filePath = (part.arguments as any)?.path ?? (part.arguments as any)?.file_path;
+        if (typeof filePath === "string") files.add(filePath);
       }
       if (part.name === "bash") {
         // biome-ignore lint/suspicious/noExplicitAny: pi SDK message content type

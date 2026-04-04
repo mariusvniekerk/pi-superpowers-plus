@@ -194,13 +194,21 @@ async function mapWithConcurrencyLimit<TIn, TOut>(
 type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
 
 function updateImplementerStatus(
-  ctx: { hasUI?: boolean; ui?: { setStatus(id: string, text: string | undefined): void } },
+  ctx: { hasUI?: boolean; ui?: { setStatus(id: string, text: string | undefined): void }; cwd?: string },
   registry: ImplementerWorkstreamRegistry,
 ): void {
   if (!ctx.hasUI || !ctx.ui) return;
-  const active = registry.listActive()[0];
-  if (!active) {
+  const activeWorkstreams = registry.listActive();
+  if (activeWorkstreams.length === 0) {
     ctx.ui.setStatus("subagent", undefined);
+    return;
+  }
+  const currentCwd = typeof ctx.cwd === "string" ? path.resolve(ctx.cwd) : undefined;
+  const active =
+    (currentCwd ? activeWorkstreams.find((item) => item.cwd === currentCwd) : undefined) ??
+    (activeWorkstreams.length === 1 ? activeWorkstreams[0] : undefined);
+  if (!active) {
+    ctx.ui.setStatus("subagent", `Implementer: ${activeWorkstreams.length} active`);
     return;
   }
   ctx.ui.setStatus("subagent", `Implementer: ${active.taskKey} active`);
@@ -559,7 +567,7 @@ export default function (pi: ExtensionAPI) {
             const adHoc = workstreams.create(`adhoc-${Date.now()}`, resolvedImplementerCwd);
             let result: SingleResult;
             try {
-              result = await implementerRuntime.run({ record: adHoc, agent, task: params.task });
+              result = await implementerRuntime.run({ record: adHoc, agent, task: params.task, signal });
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : String(error);
               workstreams.complete(adHoc.workstreamId);
@@ -618,7 +626,7 @@ export default function (pi: ExtensionAPI) {
 
           let result: SingleResult;
           try {
-            result = await implementerRuntime.run({ record, agent, task: params.task });
+            result = await implementerRuntime.run({ record, agent, task: params.task, signal });
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             persistWorkstreams(pi.appendEntry.bind(pi), workstreams);
