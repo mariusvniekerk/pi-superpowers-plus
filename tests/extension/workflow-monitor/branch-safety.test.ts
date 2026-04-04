@@ -159,7 +159,7 @@ describe("branch safety monitor", () => {
     expect(res2.content[0].text as string).toContain("branch-b");
   });
 
-  test("branch notice stays one-shot across session_start(resume) reconstruction", async () => {
+  test("branch notice is shown again after session_start(resume) resets state", async () => {
     execSyncMock.mockImplementation((cmd: string) => {
       if (cmd.startsWith("git branch")) return Buffer.from("branch-a\n");
       throw new Error("unexpected command");
@@ -207,7 +207,7 @@ describe("branch safety monitor", () => {
       ctx,
     );
 
-    expect(res2).toBeUndefined();
+    expect(res2.content[0].text as string).toContain("branch-b");
   });
 
   test("prepends branch notice while preserving non-text tool content", async () => {

@@ -18,11 +18,11 @@ describe("session transition adapter", () => {
       previousSessionFile: "/tmp/prev.jsonl",
       shouldReconstructState: true,
       shouldClearEphemeralState: true,
-      shouldResetBranchSafety: false,
+      shouldResetBranchSafety: true,
     });
   });
 
-  test("treats reload as non-handoff reconstruction", () => {
+  test("treats reload as reconstruction that still resets one-shot branch notices", () => {
     expect(
       normalizeSessionTransition({
         type: "session_start",
@@ -32,7 +32,7 @@ describe("session transition adapter", () => {
       cause: "reload",
       shouldReconstructState: true,
       shouldClearEphemeralState: true,
-      shouldResetBranchSafety: false,
+      shouldResetBranchSafety: true,
     });
   });
 
@@ -50,8 +50,14 @@ describe("session transition adapter", () => {
   });
 
   test("supports legacy compatibility events when present", () => {
-    expect(normalizeSessionTransition({ type: "session_switch" })?.cause).toBe("legacy-switch");
-    expect(normalizeSessionTransition({ type: "session_fork" })?.cause).toBe("legacy-fork");
+    expect(normalizeSessionTransition({ type: "session_switch" })).toMatchObject({
+      cause: "legacy-switch",
+      shouldResetBranchSafety: true,
+    });
+    expect(normalizeSessionTransition({ type: "session_fork" })).toMatchObject({
+      cause: "legacy-fork",
+      shouldResetBranchSafety: true,
+    });
   });
 
   test("returns null for unknown event types", () => {
@@ -64,6 +70,9 @@ describe("session transition adapter", () => {
     ).toBe(true);
     expect(
       isSessionResetTransition(normalizeSessionTransition({ type: "session_start", reason: "reload" })!),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      isSessionResetTransition(normalizeSessionTransition({ type: "session_start", reason: "resume" })!),
+    ).toBe(true);
   });
 });

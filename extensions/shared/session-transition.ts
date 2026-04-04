@@ -26,13 +26,12 @@ function buildTransition(
   cause: SessionTransitionCause,
   previousSessionFile?: string,
 ): SessionTransition {
-  const shouldResetBranchSafety = cause === "startup" || cause === "tree";
   return {
     cause,
     previousSessionFile,
     shouldReconstructState: true,
     shouldClearEphemeralState: true,
-    shouldResetBranchSafety,
+    shouldResetBranchSafety: true,
   };
 }
 
