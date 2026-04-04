@@ -132,6 +132,26 @@ describe("WorkflowTracker", () => {
     expect(restored.getState().declaredCompletePhases).toEqual(["brainstorm", "plan"]);
   });
 
+  test("setState sanitizes malformed declared completions from persisted state", () => {
+    const legacyState = {
+      ...tracker.getState(),
+      declaredCompletePhases: ["brainstorm", "not-a-phase", "plan", 42, null],
+    } as unknown as Parameters<WorkflowTracker["setState"]>[0];
+
+    expect(() => tracker.setState(legacyState)).not.toThrow();
+    expect(tracker.getState().declaredCompletePhases).toEqual(["brainstorm", "plan"]);
+  });
+
+  test("setState falls back to empty declared completions for non-array persisted values", () => {
+    const malformedState = {
+      ...tracker.getState(),
+      declaredCompletePhases: "brainstorm",
+    } as unknown as Parameters<WorkflowTracker["setState"]>[0];
+
+    expect(() => tracker.setState(malformedState)).not.toThrow();
+    expect(tracker.getState().declaredCompletePhases).toEqual([]);
+  });
+
   test("reset() restores tracker to empty state regardless of prior state", () => {
     tracker.advanceTo("execute");
     tracker.recordArtifact("plan", "docs/plans/2026-02-20-foo.md");

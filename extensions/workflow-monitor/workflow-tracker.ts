@@ -43,6 +43,27 @@ function cloneState(state: WorkflowTrackerState): WorkflowTrackerState {
   return JSON.parse(JSON.stringify(state)) as WorkflowTrackerState;
 }
 
+function sanitizeDeclaredCompletePhases(value: unknown): Phase[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((phase): phase is Phase => typeof phase === "string" && WORKFLOW_PHASES.includes(phase as Phase));
+}
+
+function mergeWithDefaultState(state: Partial<WorkflowTrackerState>): WorkflowTrackerState {
+  const defaultState = emptyState();
+
+  return {
+    ...defaultState,
+    ...state,
+    phases: { ...defaultState.phases, ...state.phases },
+    artifacts: { ...defaultState.artifacts, ...state.artifacts },
+    prompted: { ...defaultState.prompted, ...state.prompted },
+    declaredCompletePhases: sanitizeDeclaredCompletePhases(state.declaredCompletePhases),
+  };
+}
+
 function emptyState(): WorkflowTrackerState {
   const phases = Object.fromEntries(WORKFLOW_PHASES.map((p) => [p, "pending"])) as Record<Phase, PhaseStatus>;
 
@@ -84,14 +105,7 @@ export class WorkflowTracker {
   }
 
   setState(state: WorkflowTrackerState): void {
-    this.state = {
-      ...emptyState(),
-      ...cloneState(state),
-      phases: { ...emptyState().phases, ...state.phases },
-      artifacts: { ...emptyState().artifacts, ...state.artifacts },
-      prompted: { ...emptyState().prompted, ...state.prompted },
-      declaredCompletePhases: [...(state.declaredCompletePhases ?? [])],
-    };
+    this.state = mergeWithDefaultState(cloneState(state));
   }
 
   reset(): void {
@@ -271,14 +285,7 @@ export class WorkflowTracker {
       // biome-ignore lint/suspicious/noExplicitAny: pi SDK session entry type
       const data = (entry as any).data as WorkflowTrackerState | undefined;
       if (data && typeof data === "object") {
-        last = {
-          ...emptyState(),
-          ...cloneState(data),
-          phases: { ...emptyState().phases, ...data.phases },
-          artifacts: { ...emptyState().artifacts, ...data.artifacts },
-          prompted: { ...emptyState().prompted, ...data.prompted },
-          declaredCompletePhases: [...(data.declaredCompletePhases ?? [])],
-        };
+        last = mergeWithDefaultState(cloneState(data));
       }
     }
 

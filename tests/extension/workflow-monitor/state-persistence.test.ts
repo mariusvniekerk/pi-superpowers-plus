@@ -491,11 +491,33 @@ describe("workflow-monitor state reconstruction + persistence wiring", () => {
 
   test("reconstructs workflow from legacy workflow_tracker_state entry and defaults other monitors", () => {
     const handler = createWorkflowHandler();
-    const workflow = new WorkflowTracker().getState();
-    workflow.currentPhase = "execute";
-    workflow.phases.brainstorm = "complete";
-    workflow.phases.plan = "complete";
-    workflow.phases.execute = "active";
+    const workflow = {
+      phases: {
+        brainstorm: "complete",
+        plan: "complete",
+        execute: "active",
+        verify: "pending",
+        review: "pending",
+        finish: "pending",
+      },
+      currentPhase: "execute",
+      artifacts: {
+        brainstorm: null,
+        plan: null,
+        execute: null,
+        verify: null,
+        review: null,
+        finish: null,
+      },
+      prompted: {
+        brainstorm: false,
+        plan: false,
+        execute: false,
+        verify: false,
+        review: false,
+        finish: false,
+      },
+    };
 
     reconstructState(
       {
@@ -508,11 +530,63 @@ describe("workflow-monitor state reconstruction + persistence wiring", () => {
     );
 
     expect(handler.getFullState()).toEqual({
-      workflow,
+      workflow: {
+        ...workflow,
+        declaredCompletePhases: [],
+      },
       tdd: { ...TDD_DEFAULTS, testFiles: [], sourceFiles: [] },
       debug: { ...DEBUG_DEFAULTS },
       verification: { ...VERIFICATION_DEFAULTS },
     });
+  });
+
+  test("reconstructs workflow state with sanitized declared completions from persisted entries", () => {
+    const handler = createWorkflowHandler();
+
+    reconstructState(
+      {
+        sessionManager: {
+          getBranch: () => [
+            {
+              type: "custom",
+              customType: WORKFLOW_TRACKER_ENTRY_TYPE,
+              data: {
+                phases: {
+                  brainstorm: "complete",
+                  plan: "active",
+                  execute: "pending",
+                  verify: "pending",
+                  review: "pending",
+                  finish: "pending",
+                },
+                currentPhase: "plan",
+                artifacts: {
+                  brainstorm: null,
+                  plan: null,
+                  execute: null,
+                  verify: null,
+                  review: null,
+                  finish: null,
+                },
+                prompted: {
+                  brainstorm: false,
+                  plan: false,
+                  execute: false,
+                  verify: false,
+                  review: false,
+                  finish: false,
+                },
+                declaredCompletePhases: ["brainstorm", "bogus", 123],
+              },
+            },
+          ],
+        },
+      } as any,
+      handler,
+      false,
+    );
+
+    expect(handler.getFullState().workflow.declaredCompletePhases).toEqual(["brainstorm"]);
   });
 
   test("reconstructs fresh defaults when branch has no persisted state entries", () => {
