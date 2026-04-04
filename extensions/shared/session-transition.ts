@@ -22,10 +22,7 @@ type SessionEvent = {
   previousSessionFile?: string;
 };
 
-function buildTransition(
-  cause: SessionTransitionCause,
-  previousSessionFile?: string,
-): SessionTransition {
+function buildTransition(cause: SessionTransitionCause, previousSessionFile?: string): SessionTransition {
   return {
     cause,
     previousSessionFile,

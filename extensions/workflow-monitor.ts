@@ -15,6 +15,7 @@ import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-age
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { log } from "./logging.js";
+import { normalizeSessionTransition } from "./shared/session-transition";
 import { getCurrentGitRef } from "./workflow-monitor/git";
 import { loadReference, REFERENCE_TOPICS } from "./workflow-monitor/reference-tool";
 import { getUnresolvedPhases, getUnresolvedPhasesBefore } from "./workflow-monitor/skip-confirmation";
@@ -45,7 +46,6 @@ import {
   type WorkflowTrackerState,
 } from "./workflow-monitor/workflow-tracker";
 import { getTransitionPrompt } from "./workflow-monitor/workflow-transitions";
-import { normalizeSessionTransition } from "./shared/session-transition";
 
 type SelectOption<T extends string> = { label: string; value: T };
 

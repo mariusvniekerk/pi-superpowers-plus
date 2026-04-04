@@ -65,14 +65,14 @@ describe("session transition adapter", () => {
   });
 
   test("identifies transitions that should trigger reset behavior", () => {
-    expect(
-      isSessionResetTransition(normalizeSessionTransition({ type: "session_start", reason: "startup" })!),
-    ).toBe(true);
-    expect(
-      isSessionResetTransition(normalizeSessionTransition({ type: "session_start", reason: "reload" })!),
-    ).toBe(true);
-    expect(
-      isSessionResetTransition(normalizeSessionTransition({ type: "session_start", reason: "resume" })!),
-    ).toBe(true);
+    expect(isSessionResetTransition(normalizeSessionTransition({ type: "session_start", reason: "startup" })!)).toBe(
+      true,
+    );
+    expect(isSessionResetTransition(normalizeSessionTransition({ type: "session_start", reason: "reload" })!)).toBe(
+      true,
+    );
+    expect(isSessionResetTransition(normalizeSessionTransition({ type: "session_start", reason: "resume" })!)).toBe(
+      true,
+    );
   });
 });
