@@ -9,6 +9,10 @@ describe("subagent agent discovery", () => {
     const names = res.agents.map((a) => a.name);
     expect(names).toContain("implementer");
     expect(names).toContain("code-reviewer");
+    expect(names).toContain("codebase-investigator");
+    expect(names).toContain("internet-researcher");
+    expect(names).toContain("test-runner");
+    expect(names).toContain("test-effectiveness-analyst");
   });
 
   test("ships bundled review prompts for spec and plan document loops", () => {

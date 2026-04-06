@@ -280,8 +280,14 @@ A bundled `subagent` tool lets the orchestrating agent spawn isolated subprocess
 | `code-reviewer` | Production readiness review | read, bash (read-only) | — |
 | `quality-spec-reviewer` | Quality + spec compliance check (two-stage review) | read, bash, find, grep, ls (read-only) | — |
 | `critical-reviewer` | Critical/safety review: side effects, security, debris (two-stage review) | read, bash, find, grep, ls (read-only) | — |
+| `codebase-investigator` | Repository investigation for file locations, patterns, and evidence-backed architecture answers | read, bash, find, grep, ls, lsp (read-only) | — |
+| `internet-researcher` | Current external documentation, release, and best-practice research | web_search, read (read-only) | — |
+| `test-runner` | Run noisy test or verification commands and return concise summaries | bash | — |
+| `test-effectiveness-analyst` | Audit test suites for false confidence, weak assertions, and missing edge cases | read, find, grep, ls, lsp (read-only) | — |
 
 Agent definitions live in `agents/*.md` and use YAML frontmatter to declare tools, model, extensions, and a system prompt body.
+
+Utility roles are routed to lower thinking tiers where possible (for example `test-runner` and `internet-researcher` use `openai-codex/gpt-5.4:low`), while implementation and review-heavy roles stay on higher tiers.
 
 ### Single Agent
 
@@ -337,7 +343,7 @@ Based on [Superpowers](https://github.com/obra/superpowers) by Jesse Vincent, po
 | **Debug enforcement** | Manual discipline | Manual discipline | Extension escalates after repeated failures |
 | **Verification gating** | — | — | Blocks commit/push/PR until tests pass |
 | **Workflow tracking** | — | — | Phase strip, boundary prompts, `/workflow-next` |
-| **Subagent dispatch** | — | — | Bundled `subagent` tool + 4 agent definitions |
+| **Subagent dispatch** | — | — | Bundled `subagent` tool + 10 agent definitions |
 | **TDD in subagents** | — | — | Three-scenario TDD instructions in agent profiles + prompt templates + runtime warnings |
 | **Structured results** | — | — | filesChanged, testsRan per agent |
 | **Reference content** | Everything in SKILL.md | Everything in SKILL.md | Inline guidance + on-demand `workflow_reference` tool for extended detail |
@@ -347,13 +353,17 @@ Based on [Superpowers](https://github.com/obra/superpowers) by Jesse Vincent, po
 
 ```
 pi-superpowers-plus/
-├── agents/                            # Bundled agent definitions (6 agents)
+├── agents/                            # Bundled agent definitions (10 agents)
 │   ├── implementer.md                 # Strict TDD implementation agent
 │   ├── worker.md                      # General-purpose task agent
 │   ├── code-reviewer.md               # Production readiness reviewer
 │   ├── doc-reviewer.md                # Spec/plan document reviewer
 │   ├── quality-spec-reviewer.md       # Quality + spec compliance (two-stage review)
-│   └── critical-reviewer.md           # Critical/safety reviewer (two-stage review)
+│   ├── critical-reviewer.md           # Critical/safety reviewer (two-stage review)
+│   ├── codebase-investigator.md       # Read-only repository investigation agent
+│   ├── internet-researcher.md         # External docs and best-practice research agent
+│   ├── test-runner.md                 # Low-cost noisy command runner
+│   └── test-effectiveness-analyst.md  # Test suite quality auditor
 ├── extensions/
 │   ├── logging.ts                     # File-based diagnostic logger (10KB truncation, time-based rotation)
 │   ├── plan-tracker.ts                # Task tracking tool + TUI widget
