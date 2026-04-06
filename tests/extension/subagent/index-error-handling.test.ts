@@ -152,7 +152,7 @@ describe("subagent/index error handling", () => {
   });
 
   test("exports inactivity timeout constant", () => {
-    expect(INACTIVITY_TIMEOUT_MS).toBe(480_000);
+    expect(INACTIVITY_TIMEOUT_MS).toBe(960_000);
   });
 
   test("respects concurrency cap for parallel tasks", async () => {

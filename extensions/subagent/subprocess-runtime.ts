@@ -11,7 +11,7 @@ import type { ProcessTracker } from "./lifecycle.js";
 import type { SingleResult, UsageStats } from "./runtime-types.js";
 import { getSubagentTimeoutMs } from "./timeout.js";
 
-export const INACTIVITY_TIMEOUT_MS = 480_000;
+export const INACTIVITY_TIMEOUT_MS = 960_000;
 
 export interface RunSubprocessAgentArgs {
   defaultCwd: string;
