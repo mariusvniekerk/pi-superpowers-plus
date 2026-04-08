@@ -50,6 +50,18 @@ Or add to `.pi/settings.json` (project-level) or `~/.pi/agent/config.json` (glob
 
 No configuration required. Skills and extensions activate automatically.
 
+## Local Git Hooks
+
+This repo uses `prek` to install a local hook that runs `npm audit --audit-level=low` before commits and pushes.
+
+Install the hooks with:
+
+```bash
+npm run hooks:install
+```
+
+Any reported npm vulnerability fails the hook, so dependency issues are caught before they can be checked in.
+
 ## Support
 
 - Questions / support: https://github.com/coctostan/pi-superpowers-plus/discussions
