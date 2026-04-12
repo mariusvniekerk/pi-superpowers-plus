@@ -19,7 +19,7 @@ function createWorkflowState(
   >;
   const artifacts = Object.fromEntries(WORKFLOW_PHASES.map((p) => [p, null])) as Record<Phase, string | null>;
   const prompted = Object.fromEntries(WORKFLOW_PHASES.map((p) => [p, false])) as Record<Phase, boolean>;
-  return { phases, currentPhase, artifacts, prompted };
+  return { phases, currentPhase, artifacts, prompted, declaredCompletePhases: [] };
 }
 
 function setupWithState(_state: WorkflowTrackerState) {

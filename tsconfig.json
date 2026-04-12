@@ -12,5 +12,13 @@
     "types": ["node", "vitest/globals"],
     "skipLibCheck": true
   },
-  "include": ["extensions/**/*.ts", "vitest.config.ts"]
+  "include": [
+    "extensions/**/*.ts",
+    "tests/**/*.ts",
+    "tests/**/*.d.ts",
+    "skills/**/*.ts",
+    "skills/**/*.d.ts",
+    "vitest.config.ts"
+  ],
+  "exclude": ["tests/extension/pi-subagents-upstream-discovery.test.ts"]
 }

@@ -7,7 +7,8 @@ Use this when you want to verify this package inside a real `pi` process without
 For repo-level validation, load the package directly from the checkout and disable normal extension discovery:
 
 ```bash
-HOME="$(mktemp -d)" \
+TMP_HOME="$(mktemp -d)"
+HOME="$TMP_HOME" \
 pi --mode rpc --no-session --no-extensions -e /absolute/path/to/pi-superpowers-plus
 ```
 
@@ -60,7 +61,7 @@ This is enough to prove:
 If you also want to verify the `pi-subagents-agent-sync` behavior, use a clean temporary `HOME` and inspect the synced agent directories after startup:
 
 ```bash
-find "$HOME/.pi/agent/agents" "$HOME/.agents" -maxdepth 1 -type f
+find "$TMP_HOME/.pi/agent/agents" "$TMP_HOME/.agents" -maxdepth 1 -type f 2>/dev/null
 ```
 
 Expected files include:
@@ -68,7 +69,11 @@ Expected files include:
 - `spx-worker.md`
 - the rest of the managed `spx-*` agent set
 
-This validates that `session_start` triggered the sync extension and that the managed agents were written to the same user-agent locations upstream discovery scans.
+Expected directory behavior:
+- if `"$TMP_HOME/.agents"` already exists, sync writes there
+- otherwise sync writes to `"$TMP_HOME/.pi/agent/agents"`
+
+This validates that `session_start` triggered the sync extension and that the managed agents were written to the effective user-agent directory upstream discovery scans.
 
 ## When To Use `pi install`
 
@@ -81,7 +86,8 @@ Use `pi install` only when the thing you are testing is actual install behavior:
 For example:
 
 ```bash
-HOME="$(mktemp -d)" pi install /absolute/path/to/pi-superpowers-plus -l
+TMP_HOME="$(mktemp -d)"
+HOME="$TMP_HOME" pi install /absolute/path/to/pi-superpowers-plus -l
 ```
 
 That is useful for install-path testing, but it is not the best first-line validation for package behavior during development.
