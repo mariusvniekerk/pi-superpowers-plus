@@ -1,6 +1,7 @@
 ---
-name: code-reviewer
+name: spx-code-reviewer
 description: "Production readiness review: quality, security, testing (read-only)"
+managedBy: pi-superpowers-plus
 tools: read, bash, find, grep, ls
 model: openai-codex/gpt-5.4:high
 ---

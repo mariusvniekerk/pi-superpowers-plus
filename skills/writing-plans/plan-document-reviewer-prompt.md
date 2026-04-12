@@ -8,7 +8,7 @@ Use this template when dispatching a plan document reviewer subagent.
 
 ```
 Dispatch a subagent with this prompt:
-  agent: "doc-reviewer"
+  agent: "spx-doc-reviewer"
   description: "Review plan chunk N"
   prompt: |
     You are a plan document reviewer. Verify this plan chunk is complete and ready for implementation.

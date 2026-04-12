@@ -2,7 +2,7 @@
 
 Use this template when dispatching an implementer subagent.
 
-When dispatching the implementer, the orchestrator may reuse the same workstream for this task. That means follow-up prompts can assume prior task-local context is available. Do not assume context from other tasks.
+When dispatching the implementer, treat each run as an upstream `pi-subagents` task. Do not assume package-specific workstream state or injected status fields.
 
 ```
 Dispatch a subagent with this prompt:
@@ -17,12 +17,6 @@ Dispatch a subagent with this prompt:
     ## Context
 
     [Scene-setting: where this fits, dependencies, architectural context]
-
-    ## Workstream Context
-
-    This implementer workstream is scoped to Task N only.
-    Reuse context from earlier prompts in this same task when helpful.
-    Do not assume requirements or decisions from other tasks unless repeated here.
 
     ## Before You Begin
 
@@ -104,13 +98,13 @@ Dispatch a subagent with this prompt:
 
     ## Report Format
 
-    When done, report:
-    - **Status:** `DONE` | `DONE_WITH_CONCERNS` | `BLOCKED` | `NEEDS_CONTEXT`
-    - What you implemented
-    - What you tested and test results
-    - Files changed
-    - Self-review findings (if any)
-    - Any issues or concerns
+    Return the final report using exactly this structure:
+
+    Status: DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
+    Summary:
+    Tests:
+    Files Changed:
+    Concerns:
 
     Use `DONE_WITH_CONCERNS` if the task is complete but you have meaningful correctness, scope, or maintainability concerns.
     Use `BLOCKED` if you cannot complete the task.

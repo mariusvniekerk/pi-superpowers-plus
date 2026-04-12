@@ -7,7 +7,7 @@ description: Use when executing implementation plans with independent tasks in t
 
 # Subagent-Driven Development
 
-Execute plan by dispatching fresh subagent per task, with two-stage review after each: Quality+Spec review first, then Critical/Safety review.
+Execute plan by dispatching fresh upstream `pi-subagents` per task, with two-stage review after each: Quality+Spec review first, then Critical/Safety review.
 
 **Core principle:** Fresh subagent per task + two-stage review (quality+spec → critical) = high quality, catches blind spots
 
@@ -187,44 +187,45 @@ Fallback review outcomes follow the same action matrix.
 Use the `subagent` tool directly with the template text filled in:
 
 ```ts
-subagent({
-  agent: "implementer",
-  taskKey: "task-2",
-  workstreamMode: "auto",
-  task: "... full implementer prompt text ..."
-})
+subagent({ agent: "spx-implementer", task: "... full implementer prompt text ..." })
 ```
 
 ```ts
-subagent({ agent: "quality-spec-reviewer", agentScope: "both", task: "... full quality+spec review prompt text ..." })
+subagent({ agent: "spx-quality-spec-reviewer", task: "... full quality+spec review prompt text ..." })
 ```
 
 ```ts
-subagent({ agent: "critical-reviewer", agentScope: "both", task: "... full critical/safety review prompt text ..." })
+subagent({ agent: "spx-critical-reviewer", task: "... full critical/safety review prompt text ..." })
 ```
 
-For implementer dispatches, always pass a stable `taskKey` for the current plan task. Use the same `taskKey` for follow-up fixes inside that task so the implementer workstream can retain task-local context.
+Do not rely on package-specific runtime transport fields from the old local engine. The status contract now lives in the prompt and must be parsed from the implementer output.
 
-If the active implementer has accumulated bad context for the same task, rotate it explicitly:
+### Structured Output Repair Loop
 
-```ts
-subagent({
-  agent: "implementer",
-  taskKey: "task-2",
-  workstreamMode: "rotate",
-  rotationReason: "scope drift after reviewer feedback",
-  task: "... full implementer prompt text ..."
-})
-```
+If a structured agent returns output missing required sections:
 
-## Handling Implementer Status
+1. Dispatch the same agent again with a repair-only task that includes the malformed output.
+2. Ask it to repair only the missing structured parts.
+3. Retry automatically up to 3 times.
+4. If the third repair still fails, stop and escalate to the user for confirmation.
 
-Implementer subagents report one of four statuses. Handle them explicitly:
+This applies to implementers and all structured reviewers.
+
+### Handling Implementer Status
+
+Implementer subagents report one of four statuses in their final output. Parse the `Status:` line and handle it explicitly:
 
 - **`DONE`** — proceed to Quality+Spec review
 - **`DONE_WITH_CONCERNS`** — read the concerns before proceeding; if they affect correctness or scope, address them first
 - **`NEEDS_CONTEXT`** — provide the missing context and re-dispatch
 - **`BLOCKED`** — change something before retrying: provide more context, use a stronger model, split the task, or escalate to the user
+
+```ts
+subagent({
+  agent: "spx-implementer",
+  task: "Repair only the missing structured sections in this malformed report: ..."
+})
+```
 
 Never ignore an escalation and never force the same retry without changing the conditions.
 

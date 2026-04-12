@@ -10,9 +10,9 @@ Your coding agent doesn't just know the rules - it follows them. Skills teach th
 
 **12 workflow skills** that guide the agent through a structured development process - from brainstorming ideas through shipping code.
 
-**3 extensions** that run silently in the background:
+**3 local extensions** that run silently in the background, plus upstream `pi-subagents` entrypoints activated automatically:
 - **Workflow Monitor** — warns on TDD violations, tracks debug cycles, gates commits on verification, tracks workflow phase, and serves reference content on demand.
-- **Subagent** — registers a `subagent` tool for dispatching implementation and review work with bundled agent definitions, structured results, persistent implementer workstreams, and fresh reviewer sessions.
+- **Pi-Subagents Agent Sync** — installs this package's managed `spx-*` agent definitions into Pi's user agent directory so upstream `pi-subagents` can discover them.
 - **Plan Tracker** — tracks task progress with a TUI widget.
 
 **After installation**:
@@ -48,11 +48,15 @@ Or add to `.pi/settings.json` (project-level) or `~/.pi/agent/config.json` (glob
 }
 ```
 
-No configuration required. Skills and extensions activate automatically.
+No configuration required. `pi-superpowers-plus` installs `pi-subagents` directly and activates the upstream orchestration runtime automatically.
 
 ## Local Git Hooks
 
-This repo uses `prek` to install a local hook that runs `npm audit --audit-level=low` before commits and pushes.
+This repo uses `prek` to install local Git hooks.
+
+Before commits, the hooks run `npm run lint` and `npm run typecheck`.
+
+Before pushes, the hooks run `npm test` and `npm audit --audit-level=low`.
 
 Install the hooks with:
 
@@ -60,7 +64,7 @@ Install the hooks with:
 npm run hooks:install
 ```
 
-Any reported npm vulnerability fails the hook, so dependency issues are caught before they can be checked in.
+Any failing static check, test run, or audit check fails the hook.
 
 ## Support
 
@@ -85,9 +89,8 @@ If you're currently using [`pi-superpowers`](https://github.com/coctostan/pi-sup
 - **Spec review loop in brainstorming** — written specs are reviewed before planning, then explicitly approved by the user
 - **Plan review loop in writing-plans** — plan chunks can be reviewed for completeness, scope, and file structure before execution
 - **Architecture-aware planning guidance** — scope checks, file-structure planning, and isolation guidance imported from upstream 5.x
-- **Stronger subagent protocol** — implementers now report `DONE`, `DONE_WITH_CONCERNS`, `BLOCKED`, or `NEEDS_CONTEXT`
-- **Persistent implementer workstreams** — implementers can now retain task-local context across follow-up rounds when the orchestrator supplies a stable `taskKey`
-- **Fresh reviewer sessions** — reviewer runs remain isolated by design so review stays independent from prior implementation conversation
+- **Managed subagent stack** — upstream `pi-subagents` handles execution while this package ships managed `spx-*` workflow agents
+- **Prompt-level structured protocols** — implementers and reviewers now return required sections that the orchestrator validates and can repair automatically
 - **Debug enforcement** escalation after repeated failing tests
 - **Verification gating** for `git commit` / `git push` / `gh pr create` until passing tests are run (suppressed during active plan execution)
 - **Workflow tracking + boundary prompts** (and `/workflow-next` handoff)
@@ -275,36 +278,40 @@ Skills are markdown files the agent reads to learn *what* to do. Extensions are 
 | Run tests before claiming done | `verification-before-completion` | Verification gate warns on commit/push/PR |
 | Follow workflow phases | All skills cross-reference each other | Workflow tracker detects phases, prompts at boundaries |
 | Dispatch implementation work | `subagent-driven-development` | Subagent extension spawns isolated agents |
-| Review before merge | `requesting-code-review` | Subagent dispatches code-reviewer agent |
+| Review before merge | `requesting-code-review` | Subagent dispatches the managed `spx-code-reviewer` agent |
 The orchestrating agent's enforcement is advisory (warnings injected into tool results).
 
 ## Subagent Dispatch
 
-A bundled `subagent` tool lets the orchestrating agent spawn isolated subprocess agents for implementation and review tasks. No external dependencies required.
+This package now uses upstream `pi-subagents` for orchestration and ships managed `spx-*` agent definitions for workflow-specific roles.
+
+- `pi-subagents` owns execution, chains, parallelism, and async behavior
+- `pi-superpowers-plus` owns workflow prompts, enforcement, and structured-agent protocols
+- `extensions/pi-subagents-agent-sync.ts` installs bundled `spx-*` agents into Pi's user agent directory automatically
 
 ### Bundled Agents
 
-| Agent | Purpose | Tools | Extensions |
-|-------|---------|-------|------------|
-| `implementer` | Strict TDD implementation | read, write, edit, bash, lsp | — |
-| `worker` | General-purpose task execution | read, write, edit, bash, lsp | — |
-| `doc-reviewer` | Spec/plan document review | read, bash, find, grep, ls (read-only) | — |
-| `code-reviewer` | Production readiness review | read, bash (read-only) | — |
-| `quality-spec-reviewer` | Quality + spec compliance check (two-stage review) | read, bash, find, grep, ls (read-only) | — |
-| `critical-reviewer` | Critical/safety review: side effects, security, debris (two-stage review) | read, bash, find, grep, ls (read-only) | — |
-| `codebase-investigator` | Repository investigation for file locations, patterns, and evidence-backed architecture answers | read, bash, find, grep, ls, lsp (read-only) | — |
-| `internet-researcher` | Current external documentation, release, and best-practice research | web_search, read (read-only) | — |
-| `test-runner` | Run noisy test or verification commands and return concise summaries | bash | — |
-| `test-effectiveness-analyst` | Audit test suites for false confidence, weak assertions, and missing edge cases | read, find, grep, ls, lsp (read-only) | — |
+| Agent | Purpose | Tools |
+|-------|---------|-------|
+| `spx-implementer` | Strict TDD implementation with required final status block | read, write, edit, bash, lsp |
+| `spx-worker` | General-purpose task execution | read, write, edit, bash, lsp |
+| `spx-doc-reviewer` | Spec/plan document review | read, bash, find, grep, ls |
+| `spx-code-reviewer` | Production readiness review | read, bash, find, grep, ls |
+| `spx-quality-spec-reviewer` | Quality + spec compliance review | read, bash, find, grep, ls |
+| `spx-critical-reviewer` | Critical/safety review: side effects, security, debris | read, bash, find, grep, ls |
+| `spx-codebase-investigator` | Repository investigation for file locations, patterns, and evidence-backed architecture answers | read, bash, find, grep, ls, lsp |
+| `spx-internet-researcher` | Current external documentation, release, and best-practice research | web_search, read |
+| `spx-test-runner` | Run noisy test or verification commands and return concise summaries | bash |
+| `spx-test-effectiveness-analyst` | Audit test suites for false confidence, weak assertions, and missing edge cases | read, find, grep, ls, lsp |
 
-Agent definitions live in `agents/*.md` and use YAML frontmatter to declare tools, model, extensions, and a system prompt body.
+Agent definitions live in `agents/spx-*.md` and use YAML frontmatter to declare tools, model, and the structured protocol expected by the workflow.
 
-Utility roles are routed to lower thinking tiers where possible (for example `test-runner` and `internet-researcher` use `openai-codex/gpt-5.4:low`), while implementation and review-heavy roles stay on higher tiers.
+Utility roles are routed to lower thinking tiers where possible (for example `spx-test-runner` and `spx-internet-researcher` use `openai-codex/gpt-5.4:low`), while implementation and review-heavy roles stay on higher tiers.
 
 ### Single Agent
 
 ```ts
-subagent({ agent: "implementer", task: "Implement the retry logic per docs/plans/retry-plan.md Task 3" })
+subagent({ agent: "spx-implementer", task: "Implement the retry logic per docs/plans/retry-plan.md Task 3" })
 ```
 
 ### Parallel Tasks
@@ -312,19 +319,18 @@ subagent({ agent: "implementer", task: "Implement the retry logic per docs/plans
 ```ts
 subagent({
   tasks: [
-    { agent: "worker", task: "Fix failing test in auth.test.ts" },
-    { agent: "worker", task: "Fix failing test in cache.test.ts" },
+    { agent: "spx-worker", task: "Fix failing test in auth.test.ts" },
+    { agent: "spx-worker", task: "Fix failing test in cache.test.ts" },
   ],
 })
 ```
 
 ### Structured Results
 
-Single-agent results include:
-- `filesChanged` — list of files written/edited
-- `testsRan` — whether any test commands were executed
-- `status` — `"completed"` or `"failed"`
-- `implementerStatus` — implementer-reported task outcome such as `DONE`, `DONE_WITH_CONCERNS`, `BLOCKED`, or `NEEDS_CONTEXT`
+Structured workflow agents now report required prompt-level sections instead of relying on package-specific runtime fields. For example:
+- `spx-implementer` ends with `Status: DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT`
+- reviewer agents return required sections such as `Strengths`, `Issues`, `Verdict`, and `Flags For Orchestrator`
+- orchestrator skills automatically issue repair-only follow-ups when required sections are missing, up to 3 times
 
 ### Custom Agents
 
@@ -355,9 +361,9 @@ Based on [Superpowers](https://github.com/obra/superpowers) by Jesse Vincent, po
 | **Debug enforcement** | Manual discipline | Manual discipline | Extension escalates after repeated failures |
 | **Verification gating** | — | — | Blocks commit/push/PR until tests pass |
 | **Workflow tracking** | — | — | Phase strip, boundary prompts, `/workflow-next` |
-| **Subagent dispatch** | — | — | Bundled `subagent` tool + 10 agent definitions |
+| **Subagent dispatch** | — | — | Upstream `pi-subagents` + 10 managed `spx-*` agent definitions |
 | **TDD in subagents** | — | — | Three-scenario TDD instructions in agent profiles + prompt templates + runtime warnings |
-| **Structured results** | — | — | filesChanged, testsRan per agent |
+| **Structured results** | — | — | Prompt-level structured sections + repair loop |
 | **Reference content** | Everything in SKILL.md | Everything in SKILL.md | Inline guidance + on-demand `workflow_reference` tool for extended detail |
 | **Plan tracker** | — | — | `plan_tracker` tool with TUI progress widget |
 
@@ -365,19 +371,20 @@ Based on [Superpowers](https://github.com/obra/superpowers) by Jesse Vincent, po
 
 ```
 pi-superpowers-plus/
-├── agents/                            # Bundled agent definitions (10 agents)
-│   ├── implementer.md                 # Strict TDD implementation agent
-│   ├── worker.md                      # General-purpose task agent
-│   ├── code-reviewer.md               # Production readiness reviewer
-│   ├── doc-reviewer.md                # Spec/plan document reviewer
-│   ├── quality-spec-reviewer.md       # Quality + spec compliance (two-stage review)
-│   ├── critical-reviewer.md           # Critical/safety reviewer (two-stage review)
-│   ├── codebase-investigator.md       # Read-only repository investigation agent
-│   ├── internet-researcher.md         # External docs and best-practice research agent
-│   ├── test-runner.md                 # Low-cost noisy command runner
-│   └── test-effectiveness-analyst.md  # Test suite quality auditor
+├── agents/                            # Managed workflow agent definitions (10 agents)
+│   ├── spx-implementer.md             # Strict TDD implementation agent
+│   ├── spx-worker.md                  # General-purpose task agent
+│   ├── spx-code-reviewer.md           # Production readiness reviewer
+│   ├── spx-doc-reviewer.md            # Spec/plan document reviewer
+│   ├── spx-quality-spec-reviewer.md   # Quality + spec compliance reviewer
+│   ├── spx-critical-reviewer.md       # Critical/safety reviewer
+│   ├── spx-codebase-investigator.md   # Read-only repository investigation agent
+│   ├── spx-internet-researcher.md     # External docs and best-practice research agent
+│   ├── spx-test-runner.md             # Low-cost noisy command runner
+│   └── spx-test-effectiveness-analyst.md
 ├── extensions/
 │   ├── logging.ts                     # File-based diagnostic logger (10KB truncation, time-based rotation)
+│   ├── pi-subagents-agent-sync.ts     # Managed spx-* agent installation hook
 │   ├── plan-tracker.ts                # Task tracking tool + TUI widget
 │   ├── workflow-monitor.ts            # Extension entry point (event wiring)
 │   ├── workflow-monitor/
@@ -391,10 +398,9 @@ pi-superpowers-plus/
 │   │   ├── test-runner.ts            # Test command/result detection
 │   │   ├── investigation.ts          # Investigation signal detection
 │   │   ├── git.ts                    # Git branch/SHA detection (branch safety)
-│   │   ├── warnings.ts              # Violation warning content
+│   │   ├── warnings.ts               # Violation warning content
 │   │   ├── skip-confirmation.ts      # Phase-skip confirmation logic
-│   │   └── reference-tool.ts        # On-demand reference loading
-│   └── subagent/
+│   │   └── reference-tool.ts         # On-demand reference loading
 │       ├── index.ts                   # Subagent tool registration + execution
 │       └── agents.ts                  # Agent discovery + frontmatter parsing
 ├── skills/                           # 12 workflow skills (24 markdown files)

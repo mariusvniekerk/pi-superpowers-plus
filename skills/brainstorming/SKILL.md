@@ -115,7 +115,7 @@ digraph brainstorming {
 After writing the spec document:
 
 1. Fill the template at `spec-document-reviewer-prompt.md`
-2. Dispatch it with `subagent({ agent: "doc-reviewer", task: "... filled template ..." })`
+2. Dispatch it with `subagent({ agent: "spx-doc-reviewer", task: "... filled template ..." })`
 3. If issues are found: fix the spec, commit the updated spec, re-dispatch, repeat until approved
 4. If the loop exceeds 5 iterations, stop and ask the user for guidance
 

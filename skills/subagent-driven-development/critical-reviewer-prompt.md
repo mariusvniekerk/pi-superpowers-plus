@@ -195,7 +195,7 @@ git diff {BASE_SHA}..{HEAD_SHA}
 **How to dispatch:**
 
 ```ts
-subagent({ agent: "critical-reviewer", agentScope: "both", task: "... filled template ..." })
+subagent({ agent: "spx-critical-reviewer", task: "... filled template ..." })
 ```
 
 **Placeholders:**

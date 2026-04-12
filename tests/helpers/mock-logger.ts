@@ -19,18 +19,18 @@
 import { vi } from "vitest";
 import type { Logger } from "../../extensions/logging.js";
 
-export interface MockLogger extends Logger {
-  info: ReturnType<typeof vi.fn>;
-  warn: ReturnType<typeof vi.fn>;
-  error: ReturnType<typeof vi.fn>;
-  debug: ReturnType<typeof vi.fn>;
-}
+export type MockLogger = Logger & {
+  info: ReturnType<typeof vi.fn<(message: string) => void>>;
+  warn: ReturnType<typeof vi.fn<(message: string) => void>>;
+  error: ReturnType<typeof vi.fn<(message: string, err?: unknown) => void>>;
+  debug: ReturnType<typeof vi.fn<(message: string) => void>>;
+};
 
 export function createMockLogger(): MockLogger {
   return {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  };
+    info: vi.fn<(message: string) => void>(),
+    warn: vi.fn<(message: string) => void>(),
+    error: vi.fn<(message: string, err?: unknown) => void>(),
+    debug: vi.fn<(message: string) => void>(),
+  } as MockLogger;
 }

@@ -8,7 +8,7 @@ Use this template when dispatching a spec document reviewer subagent.
 
 ```
 Dispatch a subagent with this prompt:
-  agent: "doc-reviewer"
+  agent: "spx-doc-reviewer"
   description: "Review spec document"
   prompt: |
     You are a spec document reviewer. Verify this spec is complete and ready for planning.

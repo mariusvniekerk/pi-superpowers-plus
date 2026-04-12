@@ -134,9 +134,12 @@ export default function (pi: ExtensionAPI) {
 
   // Reconstruct state + widget on session events
   for (const event of ["session_start", "session_switch", "session_fork", "session_tree"] as const) {
-    pi.on(event, async (sessionEvent, ctx) => {
-      handleSessionTransition(sessionEvent, ctx);
-    });
+    (pi as { on(event: string, handler: (event: unknown, ctx: ExtensionContext) => void | Promise<void>): void }).on(
+      event,
+      async (sessionEvent, ctx) => {
+        handleSessionTransition(sessionEvent as { type: string; reason?: string; previousSessionFile?: string }, ctx);
+      },
+    );
   }
 
   pi.registerTool({

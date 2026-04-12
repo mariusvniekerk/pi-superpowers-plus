@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "moduleDetection": "force",
+    "noEmit": true,
+    "strict": false,
+    "allowJs": false,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node", "vitest/globals"],
+    "skipLibCheck": true
+  },
+  "include": [
+    "extensions/**/*.ts",
+    "tests/**/*.ts",
+    "tests/**/*.d.ts",
+    "skills/**/*.ts",
+    "skills/**/*.d.ts",
+    "vitest.config.ts"
+  ],
+  "exclude": ["tests/extension/pi-subagents-upstream-discovery.test.ts"]
+}

@@ -292,6 +292,6 @@ describe("phase-aware file write enforcement", () => {
     );
 
     expect(promptCount).toBe(1);
-    expect(res).toEqual({ blocked: true });
+    expect(res).toMatchObject({ block: true });
   });
 });

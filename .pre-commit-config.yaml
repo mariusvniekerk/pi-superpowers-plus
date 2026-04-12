@@ -1,10 +1,31 @@
 repos:
   - repo: local
     hooks:
+      - id: npm-lint
+        name: npm run lint
+        entry: npm run lint
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: npm-typecheck
+        name: npm run typecheck
+        entry: npm run typecheck
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: npm-test
+        name: npm test
+        entry: npm test
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-push]
       - id: npm-audit
         name: npm audit
         entry: npm audit --audit-level=low
         language: system
         always_run: true
         pass_filenames: false
-        stages: [pre-commit, pre-push]
+        stages: [pre-push]

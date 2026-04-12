@@ -1,6 +1,7 @@
 ---
-name: quality-spec-reviewer
+name: spx-quality-spec-reviewer
 description: "Combined spec compliance and code quality reviewer (read-only)"
+managedBy: pi-superpowers-plus
 tools: read, bash, find, grep, ls
 model: openai-codex/gpt-5.4:high
 ---

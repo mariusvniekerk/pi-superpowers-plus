@@ -1,6 +1,7 @@
 ---
-name: worker
+name: spx-worker
 description: General-purpose worker for isolated tasks
+managedBy: pi-superpowers-plus
 tools: read, write, edit, bash, lsp
 model: openai-codex/gpt-5.4:high
 ---

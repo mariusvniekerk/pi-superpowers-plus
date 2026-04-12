@@ -158,7 +158,7 @@ Use the prompt template from `../subagent-driven-development/quality-spec-review
 - `{HEAD_SHA}` — current HEAD
 
 ```ts
-subagent({ agent: "quality-spec-reviewer", agentScope: "both", task: "... filled template ..." })
+subagent({ agent: "spx-quality-spec-reviewer", task: "... filled template ..." })
 ```
 
 **If reviewer finds issues:** Fix them, then re-dispatch the same reviewer. Repeat until approved.
@@ -173,7 +173,7 @@ Use the prompt template from `../subagent-driven-development/critical-reviewer-p
 - `{HEAD_SHA}` — current HEAD
 
 ```ts
-subagent({ agent: "critical-reviewer", agentScope: "both", task: "... filled template ..." })
+subagent({ agent: "spx-critical-reviewer", task: "... filled template ..." })
 ```
 
 **If reviewer finds issues:** Fix them, then go back to Step d (Quality+Spec review again). This ensures fixes are fully reviewed.

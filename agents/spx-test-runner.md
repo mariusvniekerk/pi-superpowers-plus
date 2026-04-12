@@ -1,6 +1,7 @@
 ---
-name: test-runner
+name: spx-test-runner
 description: Run tests or other noisy verification commands and return only the useful summary
+managedBy: pi-superpowers-plus
 tools: bash
 model: openai-codex/gpt-5.4:low
 ---

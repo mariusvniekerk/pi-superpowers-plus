@@ -151,7 +151,7 @@ The implementer's report may be incomplete, inaccurate, or optimistic. You MUST 
 **How to dispatch:**
 
 ```ts
-subagent({ agent: "quality-spec-reviewer", agentScope: "both", task: "... filled template ..." })
+subagent({ agent: "spx-quality-spec-reviewer", task: "... filled template ..." })
 ```
 
 **Placeholders:**

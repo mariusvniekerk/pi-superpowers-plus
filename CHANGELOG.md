@@ -14,7 +14,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Two-stage review agents** — `quality-spec-reviewer` and `critical-reviewer` bundled agents for the new two-stage review system (quality+spec first, then critical/safety).
 - **Spec document review prompts** — `brainstorming` now ships a bundled `spec-document-reviewer-prompt.md` and instructs the agent to run a review loop before handing off to planning.
 - **Plan document review prompts** — `writing-plans` now ships a bundled `plan-document-reviewer-prompt.md` for chunk-level plan review before execution.
-- **Implementer status in subagent structured results** — single-agent `subagent` responses now surface `implementerStatus` when the implementer reports `DONE`, `DONE_WITH_CONCERNS`, `BLOCKED`, or `NEEDS_CONTEXT`.
+- **Managed pi-subagents agent sync** — `extensions/pi-subagents-agent-sync.ts` now installs bundled `spx-*` agent definitions into Pi's user agent directory automatically.
 
 ### Changed
 
@@ -22,11 +22,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`writing-plans` simplified plan review** — removido o loop de review com subagente (`doc-reviewer`) e chunks de 1000 linhas. Substituído por: (1) seção "No Placeholders" com red flags explícitos e (2) checklist de Self-Review inline (cobertura da spec, scan de placeholders, consistência de tipos). Alinhado ao upstream v5.0.4 + v5.0.6 — qualidade equivalente, sem overhead de latência.
 - **`writing-plans` skill synced with upstream 5.x planning guidance** — adds scope checks, file-structure planning, checkbox task syntax, and plan review loops while keeping Pi-specific execution handoff.
 - **Subagent orchestration strengthened** — `subagent-driven-development`, implementer prompts, and bundled agent profiles now use the new escalation/status protocol and architecture-aware review criteria.
+- **Subagent runtime migrated to upstream `pi-subagents`** — this package now depends on `pi-subagents`, activates its entrypoints from `node_modules`, ships namespaced `spx-*` workflow agents, and validates structured-agent output at the prompt/orchestrator layer rather than through local runtime fields.
 
 ### Removed
 
 - **`tdd-guard` extension** — TDD enforcement is now handled via runtime warnings in `workflow-monitor` and three-scenario TDD instructions embedded in agent profiles and skill text. Agent profiles no longer need `extensions: ../extensions/tdd-guard.ts` in their frontmatter.
 - **`spec-reviewer` agent** — replaced by the two-stage review system (`quality-spec-reviewer` + `critical-reviewer`).
+- **Bundled local subagent runtime** — `extensions/subagent/` and its runtime-coupled tests have been removed in favor of upstream `pi-subagents`.
 
 ---
 

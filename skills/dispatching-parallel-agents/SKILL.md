@@ -72,9 +72,9 @@ Use the `subagent` tool in parallel mode:
 ```ts
 subagent({
   tasks: [
-    { agent: "worker", task: "Fix agent-tool-abort.test.ts failures" },
-    { agent: "worker", task: "Fix batch-completion-behavior.test.ts failures" },
-    { agent: "worker", task: "Fix tool-approval-race-conditions.test.ts failures" },
+    { agent: "spx-worker", task: "Fix agent-tool-abort.test.ts failures" },
+    { agent: "spx-worker", task: "Fix batch-completion-behavior.test.ts failures" },
+    { agent: "spx-worker", task: "Fix tool-approval-race-conditions.test.ts failures" },
   ],
 })
 ```
@@ -155,9 +155,9 @@ Return: Summary of what you found and what you fixed.
 ```ts
 subagent({
   tasks: [
-    { agent: "worker", task: "Fix agent-tool-abort.test.ts" },
-    { agent: "worker", task: "Fix batch-completion-behavior.test.ts" },
-    { agent: "worker", task: "Fix tool-approval-race-conditions.test.ts" },
+    { agent: "spx-worker", task: "Fix agent-tool-abort.test.ts" },
+    { agent: "spx-worker", task: "Fix batch-completion-behavior.test.ts" },
+    { agent: "spx-worker", task: "Fix tool-approval-race-conditions.test.ts" },
   ],
 })
 ```
@@ -178,5 +178,4 @@ After agents return:
 2. **Check for conflicts** - Did agents edit same code?
 3. **Run full suite** - Verify all fixes work together
 4. **Spot check** - Agents can make systematic errors
-
 

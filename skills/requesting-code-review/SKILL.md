@@ -40,7 +40,7 @@ Fill the template at `code-reviewer.md` in this skill directory, then dispatch a
 Use the `subagent` tool with the code-reviewer template filled in:
 
 ```ts
-subagent({ agent: "code-reviewer", task: "... filled template ..." })
+subagent({ agent: "spx-code-reviewer", task: "... filled template ..." })
 ```
 
 **Placeholders:**
@@ -55,6 +55,8 @@ subagent({ agent: "code-reviewer", task: "... filled template ..." })
 - Fix Important issues before proceeding
 - Note Minor issues for later
 - Push back if reviewer is wrong (with reasoning)
+
+If the reviewer returns malformed structured output, send a repair-only follow-up that asks for only the missing sections. Retry automatically up to 3 times, then stop and escalate instead of guessing.
 
 ## Example
 
