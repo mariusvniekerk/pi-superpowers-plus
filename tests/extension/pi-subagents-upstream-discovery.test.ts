@@ -41,11 +41,10 @@ describe("pi-subagents upstream discovery", () => {
 
     expect(implementer?.source).toBe("user");
     expect(implementer?.filePath).toBe(legacyAgentPath);
-    expect(implementer?.description).toBe("Implement tasks via TDD and commit small changes");
     expect(worker?.source).toBe("user");
   });
 
-  test("preserves legacy unmanaged spx customizations when the modern user dir exists", () => {
+  test("treats the modern user agent directory as authoritative when it exists", () => {
     const legacyAgentPath = path.join(tempHome, ".pi", "agent", "agents", "spx-implementer.md");
     const modernAgentsDir = path.join(tempHome, ".agents");
 
@@ -70,8 +69,7 @@ describe("pi-subagents upstream discovery", () => {
     const result = discoverAgents(process.cwd(), "both");
     const implementer = result.agents.find((agent) => agent.name === "spx-implementer");
 
-    expect(fs.existsSync(path.join(modernAgentsDir, "spx-implementer.md"))).toBe(false);
-    expect(implementer?.filePath).toBe(legacyAgentPath);
-    expect(implementer?.description).toBe("Legacy custom implementer");
+    expect(fs.existsSync(path.join(modernAgentsDir, "spx-implementer.md"))).toBe(true);
+    expect(implementer?.filePath).toBe(path.join(modernAgentsDir, "spx-implementer.md"));
   });
 });

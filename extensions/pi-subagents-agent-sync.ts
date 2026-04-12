@@ -11,12 +11,10 @@ function getUserAgentDir(): string {
   const homeDir = os.homedir();
   const legacyDir = path.join(homeDir, ".pi", "agent", "agents");
   const modernDir = path.join(homeDir, ".agents");
+  // pi-subagents still discovers both user dirs, but the modern dir wins on name
+  // collisions. We intentionally treat ".agents" as the authoritative location
+  // whenever it exists instead of preserving legacy-only overrides.
   return fs.existsSync(modernDir) ? modernDir : legacyDir;
-}
-
-function isUnmanaged(targetPath: string): boolean {
-  if (!fs.existsSync(targetPath)) return false;
-  return !fs.readFileSync(targetPath, "utf-8").includes(MANAGED_MARKER);
 }
 
 function shouldOverwrite(targetPath: string): boolean {
@@ -25,11 +23,7 @@ function shouldOverwrite(targetPath: string): boolean {
 }
 
 function syncManagedAgents(): void {
-  const homeDir = os.homedir();
-  const legacyDir = path.join(homeDir, ".pi", "agent", "agents");
-  const modernDir = path.join(homeDir, ".agents");
   const targetDir = getUserAgentDir();
-  const syncingToModernDir = targetDir === modernDir;
   fs.mkdirSync(targetDir, { recursive: true });
 
   for (const entry of fs.readdirSync(SOURCE_DIR)) {
@@ -37,16 +31,6 @@ function syncManagedAgents(): void {
 
     const sourcePath = path.join(SOURCE_DIR, entry);
     const targetPath = path.join(targetDir, entry);
-    const legacyPath = path.join(legacyDir, entry);
-
-    if (syncingToModernDir && isUnmanaged(legacyPath)) {
-      // Preserve legacy-only customizations when upstream discovery merges both dirs.
-      if (fs.existsSync(targetPath) && shouldOverwrite(targetPath)) {
-        fs.rmSync(targetPath);
-      }
-      continue;
-    }
-
     if (!shouldOverwrite(targetPath)) continue;
 
     fs.copyFileSync(sourcePath, targetPath);
@@ -57,7 +41,6 @@ export const __internal = {
   MANAGED_MARKER,
   SOURCE_DIR,
   getUserAgentDir,
-  isUnmanaged,
   shouldOverwrite,
   syncManagedAgents,
 };
