@@ -117,7 +117,7 @@ describe("completion-action gating on bash commands", () => {
     );
 
     expect(ctx.ui.select).toHaveBeenCalled();
-    expect(result).toEqual({ blocked: true });
+    expect(result).toMatchObject({ block: true });
     // Editor should be prefilled with verification skill
     expect(editorTexts.length).toBeGreaterThan(0);
     expect(editorTexts.at(-1)).toBe("/skill:verification-before-completion");
@@ -150,7 +150,7 @@ describe("completion-action gating on bash commands", () => {
     );
 
     // Should NOT block
-    expect(toolCallResult?.blocked).not.toBe(true);
+    expect(toolCallResult?.block).not.toBe(true);
 
     // Verify should be marked skipped
     const latest = fake.appendedEntries.at(-1)?.data;
@@ -204,7 +204,7 @@ describe("completion-action gating on bash commands", () => {
       ctx,
     );
 
-    expect(result?.blocked).not.toBe(true);
+    expect(result?.block).not.toBe(true);
 
     const latest = fake.appendedEntries.at(-1)?.data;
     expect(latest.workflow.phases.verify).toBe("skipped");
@@ -237,7 +237,7 @@ describe("completion-action gating on bash commands", () => {
       ctx,
     );
 
-    expect(result).toEqual({ blocked: true });
+    expect(result).toMatchObject({ block: true });
   });
 
   test("non-interactive commit path does not prompt and preserves warning behavior", async () => {
@@ -269,7 +269,7 @@ describe("completion-action gating on bash commands", () => {
     // Should NOT prompt (no UI)
     expect(ctx.ui.select).not.toHaveBeenCalled();
     // Should NOT block
-    expect(toolCallResult?.blocked).not.toBe(true);
+    expect(toolCallResult?.block).not.toBe(true);
 
     // Verification warning should still be injected via tool_result path
     const resultEvent = {
@@ -315,7 +315,7 @@ describe("completion-action gating on bash commands", () => {
     );
 
     expect(ctx.ui.select).not.toHaveBeenCalled();
-    expect(result?.blocked).not.toBe(true);
+    expect(result?.block).not.toBe(true);
   });
 
   test("commit with all phases resolved does not gate", async () => {
@@ -345,7 +345,7 @@ describe("completion-action gating on bash commands", () => {
     );
 
     expect(ctx.ui.select).not.toHaveBeenCalled();
-    expect(result?.blocked).not.toBe(true);
+    expect(result?.block).not.toBe(true);
   });
 
   test("git commit during active execution is not gated (suppressed while executing)", async () => {
@@ -378,7 +378,7 @@ describe("completion-action gating on bash commands", () => {
 
     // While execute is active, the gate must not fire
     expect(ctx.ui.select).not.toHaveBeenCalled();
-    expect(result?.blocked).not.toBe(true);
+    expect(result?.block).not.toBe(true);
   });
 
   test("plan task updates must not end execute phase and trigger verify/review skip prompt", async () => {
@@ -420,7 +420,7 @@ describe("completion-action gating on bash commands", () => {
     );
 
     expect(ctx.ui.select).not.toHaveBeenCalled();
-    expect(result?.blocked).not.toBe(true);
+    expect(result?.block).not.toBe(true);
   });
 
   test("completion gate prompts with string labels (not objects)", async () => {

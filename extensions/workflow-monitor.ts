@@ -11,7 +11,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { StringEnum } from "@mariozechner/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+  InputEventResult,
+  ThemeColor,
+  ToolCallEventResult,
+} from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { log } from "./logging.js";
@@ -196,7 +202,7 @@ export default function (pi: ExtensionAPI) {
     }
   };
 
-  const phaseToSkill: Record<string, string> = {
+  const phaseToSkill: Record<Phase, string> = {
     brainstorm: "brainstorming",
     plan: "writing-plans",
     execute: "executing-plans",
@@ -225,7 +231,7 @@ export default function (pi: ExtensionAPI) {
     return furthest;
   }
 
-  const boundaryToPhase: Record<TransitionBoundary, keyof typeof phaseToSkill> = {
+  const boundaryToPhase: Record<TransitionBoundary, Phase> = {
     design_committed: "brainstorm",
     plan_ready: "plan",
     execution_complete: "execute",
@@ -265,15 +271,18 @@ export default function (pi: ExtensionAPI) {
 
   // --- State reconstruction on session events ---
   for (const event of ["session_start", "session_switch", "session_fork", "session_tree"] as const) {
-    pi.on(event, async (sessionEvent, ctx) => {
-      handleSessionTransition(sessionEvent, ctx);
-    });
+    (pi as { on(event: string, handler: (event: unknown, ctx: ExtensionContext) => void | Promise<void>): void }).on(
+      event,
+      async (sessionEvent, ctx) => {
+        handleSessionTransition(sessionEvent as { type: string; reason?: string; previousSessionFile?: string }, ctx);
+      },
+    );
   }
 
   // --- Input observation (skill detection + skip-confirmation gate) ---
-  pi.on("input", async (event, ctx) => {
+  pi.on("input", async (event, ctx): Promise<undefined | InputEventResult> => {
     if (event.source === "extension") return;
-    const text = (event.text as string | undefined) ?? (event.input as string | undefined) ?? "";
+    const text = event.text ?? "";
 
     const targetPhase = parseTargetPhase(text);
 
@@ -324,10 +333,10 @@ export default function (pi: ExtensionAPI) {
         return;
       } else if (choice === "do_now") {
         ctx.ui.setEditorText(`/skill:${missingSkill}`);
-        return { blocked: true };
+        return { action: "handled" };
       } else {
         // cancel
-        return { blocked: true };
+        return { action: "handled" };
       }
     }
 
@@ -350,7 +359,7 @@ export default function (pi: ExtensionAPI) {
       updateWidget(ctx);
       return;
     } else if (summaryChoice === "cancel") {
-      return { blocked: true };
+      return { action: "handled" };
     }
 
     // review_individually: prompt for each
@@ -369,10 +378,10 @@ export default function (pi: ExtensionAPI) {
         updateWidget(ctx);
       } else if (choice === "do_now") {
         ctx.ui.setEditorText(`/skill:${skill}`);
-        return { blocked: true };
+        return { action: "handled" };
       } else {
         // cancel
-        return { blocked: true };
+        return { action: "handled" };
       }
     }
 
@@ -477,7 +486,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   // --- Tool call observation (detect file writes + verification gate) ---
-  pi.on("tool_call", async (event, ctx) => {
+  pi.on("tool_call", async (event, ctx): Promise<undefined | ToolCallEventResult> => {
     const toolCallId = event.toolCallId;
 
     if (event.toolName === "bash") {
@@ -498,7 +507,7 @@ export default function (pi: ExtensionAPI) {
           if (unresolved.length > 0) {
             const gateResult = await promptCompletionGate(unresolved, ctx);
             if (gateResult === "blocked") {
-              return { blocked: true };
+              return { block: true, reason: "Completion gate requires resolving workflow phases first" };
             }
             if (unresolved.includes("verify")) {
               handler.recordVerificationWaiver();
@@ -541,7 +550,7 @@ export default function (pi: ExtensionAPI) {
         if (isThinkingPhase && !isPlansWrite) {
           const escalation = await maybeEscalate("process", ctx);
           if (escalation === "block") {
-            return { blocked: true };
+            return { block: true, reason: "Writes outside docs/plans are blocked during brainstorming and planning" };
           }
 
           pendingProcessWarnings.set(
@@ -801,7 +810,7 @@ export default function (pi: ExtensionAPI) {
 
       // TDD phase
       if (tddPhase !== "IDLE") {
-        const colorMap: Record<string, string> = {
+        const colorMap: Record<string, ThemeColor> = {
           "RED-PENDING": "error",
           RED: "error",
           GREEN: "success",
@@ -822,7 +831,7 @@ export default function (pi: ExtensionAPI) {
         }
       }
 
-      return parts.length > 0 ? new Text(parts.join(theme.fg("dim", "  |  ")), 0, 0) : undefined;
+      return new Text(parts.join(theme.fg("dim", "  |  ")), 0, 0);
     });
   }
 

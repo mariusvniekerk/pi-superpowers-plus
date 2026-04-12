@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 import { describe, expect, test } from "vitest";
 import { loadAgentFrontmatter } from "../helpers/agent-frontmatter";
@@ -38,17 +39,40 @@ describe("workflow skill content", () => {
     expect(read("skills/writing-plans/plan-document-reviewer-prompt.md")).toContain('agent: "spx-doc-reviewer"');
   });
 
-  test("package metadata points at upstream pi-subagents instead of the local runtime", () => {
+  test("package metadata points at shipped local pi-subagents wrappers with a typecheck gate", () => {
     const pkg = JSON.parse(read("package.json")) as {
+      scripts?: Record<string, string>;
       pi?: { extensions?: string[] };
       dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
     };
 
-    expect(pkg.pi?.extensions).toContain("node_modules/pi-subagents/index.ts");
-    expect(pkg.pi?.extensions).toContain("node_modules/pi-subagents/notify.ts");
+    expect(pkg.pi?.extensions).toContain("extensions/pi-subagents-index.js");
+    expect(pkg.pi?.extensions).toContain("extensions/pi-subagents-notify.js");
     expect(pkg.pi?.extensions).toContain("extensions/pi-subagents-agent-sync.ts");
     expect(pkg.pi?.extensions).not.toContain("extensions/subagent/index.ts");
     expect(pkg.dependencies?.["pi-subagents"]).toBeDefined();
+    expect(pkg.scripts?.typecheck).toBe("tsc --noEmit");
+    expect(pkg.devDependencies?.typescript).toBeDefined();
+    expect(pkg.devDependencies?.["@types/node"]).toBeDefined();
+    expect(read("tsconfig.json")).toContain('"noEmit": true');
+
+    const indexPath = path.join(process.cwd(), "extensions/pi-subagents-index.js");
+    const notifyPath = path.join(process.cwd(), "extensions/pi-subagents-notify.js");
+
+    expect(fs.existsSync(indexPath)).toBe(true);
+    expect(fs.existsSync(notifyPath)).toBe(true);
+
+    const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+    const packOutput = execFileSync(npmCommand, ["pack", "--json", "--dry-run"], {
+      cwd: process.cwd(),
+      encoding: "utf-8",
+    });
+    const tarballs = JSON.parse(packOutput) as Array<{ files?: Array<{ path: string }> }>;
+    const packedFiles = new Set(tarballs[0]?.files?.map((file) => file.path) ?? []);
+
+    expect(packedFiles.has("extensions/pi-subagents-index.js")).toBe(true);
+    expect(packedFiles.has("extensions/pi-subagents-notify.js")).toBe(true);
   });
 
   test("brainstorming requires recommitting spec changes after review feedback", () => {

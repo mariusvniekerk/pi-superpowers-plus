@@ -196,8 +196,8 @@ describe("skip-confirmation gating on /skill transitions", () => {
 
     expect(ctx.ui.select).toHaveBeenCalledTimes(1);
 
-    // Should block by returning { blocked: true }
-    expect(result).toEqual({ blocked: true });
+    // Should stop the input by returning { action: "handled" }
+    expect(result).toEqual({ action: "handled" });
 
     // Editor should be set to the missing phase's skill
     expect(editorTexts.at(-1)).toBe("/skill:writing-plans");
@@ -235,7 +235,7 @@ describe("skip-confirmation gating on /skill transitions", () => {
     const result = await onInput({ source: "user", text: "/skill:executing-plans" }, ctx);
 
     expect(ctx.ui.select).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ blocked: true });
+    expect(result).toEqual({ action: "handled" });
     // Editor should not be touched
     expect(ctx.ui.setEditorText).not.toHaveBeenCalled();
   });
@@ -303,7 +303,7 @@ describe("skip-confirmation gating on /skill transitions", () => {
     const result = await onInput({ source: "user", text: "/skill:executing-plans" }, ctx);
 
     expect(ctx.ui.select).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ blocked: true });
+    expect(result).toEqual({ action: "handled" });
   });
 
   test("multi unresolved + review one-by-one: prompts each, skip individual", async () => {
@@ -379,7 +379,7 @@ describe("skip-confirmation gating on /skill transitions", () => {
 
     // Summary prompt + 1 individual prompt (stops at do_now)
     expect(ctx.ui.select).toHaveBeenCalledTimes(2);
-    expect(result).toEqual({ blocked: true });
+    expect(result).toEqual({ action: "handled" });
     expect(editorTexts.at(-1)).toBe("/skill:brainstorming");
   });
 
@@ -408,7 +408,7 @@ describe("skip-confirmation gating on /skill transitions", () => {
     };
 
     await onSessionStart(emitSessionStart("resume", "/tmp/prev.jsonl"), ctx);
-    await onInput({ source: "extension", input: "/skill:executing-plans" }, ctx);
+    await onInput({ source: "extension", text: "/skill:executing-plans" }, ctx);
 
     // Extension inputs are skipped entirely (early return)
     expect(ctx.ui.select).not.toHaveBeenCalled();
@@ -443,7 +443,7 @@ describe("multiline /skill input: gate applies to furthest target phase", () => 
     await onInput(
       {
         source: "user",
-        input: "/skill:writing-plans\nsome text\n/skill:verification-before-completion",
+        text: "/skill:writing-plans\nsome text\n/skill:verification-before-completion",
       },
       ctx,
     );
@@ -581,12 +581,12 @@ describe("multiline /skill input: gate applies to furthest target phase", () => 
     const result = await onInput(
       {
         source: "user",
-        input: "/skill:brainstorming\n/skill:executing-plans",
+        text: "/skill:brainstorming\n/skill:executing-plans",
       },
       ctx,
     );
 
     expect(ctx.ui.select).toHaveBeenCalled();
-    expect(result).toEqual({ blocked: true });
+    expect(result).toEqual({ action: "handled" });
   });
 });

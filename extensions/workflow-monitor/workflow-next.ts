@@ -47,7 +47,7 @@ export function parseWorkflowNextArgs(args: string): WorkflowNextParseResult | n
     if (token === "--done") {
       const phase = tokens[index + 1];
       if (!targetPhase || !phase || !getPriorWorkflowPhases(targetPhase).includes(phase as Phase)) return null;
-      donePhases.push(phase);
+      donePhases.push(phase as Phase);
       index += 1;
       continue;
     }

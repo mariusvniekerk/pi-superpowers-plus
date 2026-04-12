@@ -31,15 +31,17 @@ describe("pi-subagents upstream discovery", () => {
   test("discovers synced spx agents from the user agent directory", () => {
     syncInternal.syncManagedAgents();
 
-    const syncedAgentPath = path.join(tempHome, ".pi", "agent", "agents", "spx-implementer.md");
-    expect(fs.existsSync(syncedAgentPath)).toBe(true);
+    const legacyAgentPath = path.join(tempHome, ".pi", "agent", "agents", "spx-implementer.md");
+    const modernAgentPath = path.join(tempHome, ".agents", "spx-implementer.md");
+    expect(fs.existsSync(legacyAgentPath)).toBe(true);
+    expect(fs.existsSync(modernAgentPath)).toBe(true);
 
     const result = discoverAgents(process.cwd(), "both");
     const implementer = result.agents.find((agent) => agent.name === "spx-implementer");
     const worker = result.agents.find((agent) => agent.name === "spx-worker");
 
     expect(implementer?.source).toBe("user");
-    expect(implementer?.filePath).toBe(syncedAgentPath);
+    expect(implementer?.filePath).toBe(modernAgentPath);
     expect(implementer?.description).toBe("Implement tasks via TDD and commit small changes");
     expect(worker?.source).toBe("user");
   });

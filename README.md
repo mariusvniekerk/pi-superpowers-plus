@@ -52,7 +52,11 @@ No configuration required. `pi-superpowers-plus` installs `pi-subagents` directl
 
 ## Local Git Hooks
 
-This repo uses `prek` to install a local hook that runs `npm audit --audit-level=low` before commits and pushes.
+This repo uses `prek` to install local Git hooks.
+
+Before commits, the hooks run `npm run lint` and `npm run typecheck`.
+
+Before pushes, the hooks run `npm test` and `npm audit --audit-level=low`.
 
 Install the hooks with:
 
@@ -60,7 +64,7 @@ Install the hooks with:
 npm run hooks:install
 ```
 
-Any reported npm vulnerability fails the hook, so dependency issues are caught before they can be checked in.
+Any failing static check, test run, or audit check fails the hook.
 
 ## Support
 

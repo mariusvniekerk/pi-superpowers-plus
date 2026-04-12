@@ -26,6 +26,8 @@ describe("structured agent protocols", () => {
   test("reviewer prompt templates require structured review summaries", () => {
     expect(read("skills/requesting-code-review/code-reviewer.md")).toContain("### Verdict");
     expect(read("skills/requesting-code-review/code-reviewer.md")).toContain("### Flags For Orchestrator");
+    expect(read("skills/requesting-code-review/code-reviewer.md")).not.toContain("### Assessment");
+    expect(read("skills/requesting-code-review/code-reviewer.md")).not.toContain("## Review Summary");
     expect(read("skills/subagent-driven-development/quality-spec-reviewer-prompt.md")).toContain("## Review Summary");
     expect(read("skills/subagent-driven-development/critical-reviewer-prompt.md")).toContain("## Review Summary");
     expect(read("skills/subagent-driven-development/critical-reviewer-prompt.md")).toContain(
