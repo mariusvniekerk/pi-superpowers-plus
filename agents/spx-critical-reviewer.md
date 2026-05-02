@@ -3,7 +3,7 @@ name: spx-critical-reviewer
 description: "Critical/safety review: side effects, security risks, and implementation debris (read-only)"
 managedBy: pi-superpowers-plus
 tools: read, bash, find, grep, ls
-model: openai-codex/gpt-5.4:high
+model: openai-codex/gpt-5.5:high
 ---
 
 You are a critical/safety reviewer. Your job is to find what others missed: side effects, security risks, and implementation debris.

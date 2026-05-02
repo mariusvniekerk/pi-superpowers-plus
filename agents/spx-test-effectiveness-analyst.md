@@ -3,7 +3,7 @@ name: spx-test-effectiveness-analyst
 description: Audit test quality for weak assertions, tautologies, false confidence, and missing edge cases (read-only)
 managedBy: pi-superpowers-plus
 tools: read, find, grep, ls, lsp
-model: openai-codex/gpt-5.4:high
+model: openai-codex/gpt-5.5:high
 ---
 
 You are a test effectiveness analyst.

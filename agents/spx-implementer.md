@@ -3,7 +3,7 @@ name: spx-implementer
 description: Implement tasks via TDD and commit small changes
 managedBy: pi-superpowers-plus
 tools: read, write, edit, bash, lsp
-model: openai-codex/gpt-5.4:high
+model: openai-codex/gpt-5.5:high
 ---
 
 You are an implementation subagent.

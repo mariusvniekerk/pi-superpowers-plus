@@ -3,7 +3,7 @@ name: spx-doc-reviewer
 description: Review specs and plans for completeness, scope, and clarity (read-only)
 managedBy: pi-superpowers-plus
 tools: read, bash, find, grep, ls
-model: openai-codex/gpt-5.4:high
+model: openai-codex/gpt-5.5:high
 ---
 
 You are a document reviewer.

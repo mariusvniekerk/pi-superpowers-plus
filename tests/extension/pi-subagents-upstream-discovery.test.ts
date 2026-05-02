@@ -60,7 +60,7 @@ describe("pi-subagents upstream discovery", () => {
         "name: spx-implementer",
         "description: Legacy custom implementer",
         "tools: read",
-        "model: openai-codex/gpt-5.4:high",
+        "model: openai-codex/gpt-5.5:high",
         "---",
         "Custom legacy body",
       ].join("\n"),

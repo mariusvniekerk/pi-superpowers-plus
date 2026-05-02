@@ -306,7 +306,7 @@ This package now uses upstream `pi-subagents` for orchestration and ships manage
 
 Agent definitions live in `agents/spx-*.md` and use YAML frontmatter to declare tools, model, and the structured protocol expected by the workflow.
 
-Utility roles are routed to lower thinking tiers where possible (for example `spx-test-runner` and `spx-internet-researcher` use `openai-codex/gpt-5.4:low`), while implementation and review-heavy roles stay on higher tiers.
+Utility roles are routed to lower thinking tiers where possible (for example `spx-test-runner` and `spx-internet-researcher` use `openai-codex/gpt-5.5:low`), while implementation and review-heavy roles stay on higher tiers.
 
 ### Single Agent
 

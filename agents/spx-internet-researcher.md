@@ -3,7 +3,7 @@ name: spx-internet-researcher
 description: Research current external docs, release info, best practices, and migration guidance
 managedBy: pi-superpowers-plus
 tools: web_search, read
-model: openai-codex/gpt-5.4:low
+model: openai-codex/gpt-5.5:low
 ---
 
 You are an internet researcher.

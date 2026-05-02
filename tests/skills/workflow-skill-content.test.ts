@@ -21,19 +21,19 @@ describe("workflow skill content", () => {
 
     expect(investigator.name).toBe("spx-codebase-investigator");
     expect(investigator.tools).toBe("read, bash, find, grep, ls, lsp");
-    expect(investigator.model).toBe("openai-codex/gpt-5.4:low");
+    expect(investigator.model).toBe("openai-codex/gpt-5.5:low");
 
     expect(testRunner.name).toBe("spx-test-runner");
     expect(testRunner.tools).toBe("bash");
-    expect(testRunner.model).toBe("openai-codex/gpt-5.4:low");
+    expect(testRunner.model).toBe("openai-codex/gpt-5.5:low");
 
     expect(internetResearcher.name).toBe("spx-internet-researcher");
     expect(internetResearcher.tools).toBe("web_search, read");
-    expect(internetResearcher.model).toBe("openai-codex/gpt-5.4:low");
+    expect(internetResearcher.model).toBe("openai-codex/gpt-5.5:low");
 
     expect(testEffectivenessAnalyst.name).toBe("spx-test-effectiveness-analyst");
     expect(testEffectivenessAnalyst.tools).toBe("read, find, grep, ls, lsp");
-    expect(testEffectivenessAnalyst.model).toBe("openai-codex/gpt-5.4:high");
+    expect(testEffectivenessAnalyst.model).toBe("openai-codex/gpt-5.5:high");
 
     expect(read("skills/brainstorming/spec-document-reviewer-prompt.md")).toContain('agent: "spx-doc-reviewer"');
     expect(read("skills/writing-plans/plan-document-reviewer-prompt.md")).toContain('agent: "spx-doc-reviewer"');

@@ -3,7 +3,7 @@ name: spx-codebase-investigator
 description: Investigate codebase structure, file ownership, call paths, and existing patterns (read-only)
 managedBy: pi-superpowers-plus
 tools: read, bash, find, grep, ls, lsp
-model: openai-codex/gpt-5.4:low
+model: openai-codex/gpt-5.5:low
 ---
 
 You are a codebase investigator.
