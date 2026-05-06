@@ -24,6 +24,7 @@ interface Task {
 interface KataTrackerState {
   workspace?: string;
   parentIssueNumber?: number;
+  phaseIssueNumbers?: Record<string, number>;
 }
 
 interface PlanTrackerDetails {
@@ -156,6 +157,17 @@ function idempotencyKey(kind: string, parts: string[]): string {
   return `pi-superpowers-plus:${kind}:${hash}`;
 }
 
+function currentWorkflowPhase(ctx: ExtensionContext): string | undefined {
+  const branch = ctx.sessionManager?.getBranch?.() ?? [];
+  for (let i = branch.length - 1; i >= 0; i--) {
+    const entry = branch[i] as { type?: string; customType?: string; data?: { workflow?: { currentPhase?: unknown } } };
+    if (entry.type !== "custom" || entry.customType !== "superpowers_state") continue;
+    const phase = entry.data?.workflow?.currentPhase;
+    if (typeof phase === "string" && phase.length > 0) return phase;
+  }
+  return undefined;
+}
+
 export default function (pi: ExtensionAPI) {
   let tasks: Task[] = [];
   let kata: KataTrackerState = {};
@@ -193,6 +205,30 @@ export default function (pi: ExtensionAPI) {
       throw new Error("kata response did not include issue.number");
     }
     return number;
+  };
+
+  const ensurePhaseIssue = async (ctx: ExtensionContext, phase: string, signal?: AbortSignal) => {
+    kata.phaseIssueNumbers ??= {};
+    const existing = kata.phaseIssueNumbers[phase];
+    if (existing) return existing;
+
+    const title = `Workflow phase: ${phase}`;
+    const issueNumber = await createIssue(
+      ctx,
+      [
+        "create",
+        title,
+        "--body",
+        "Workflow phase status managed by pi-superpowers-plus.",
+        "--label",
+        "pi-phase",
+        "--idempotency-key",
+        idempotencyKey("phase", [phase, title]),
+      ],
+      signal,
+    );
+    kata.phaseIssueNumbers[phase] = issueNumber;
+    return issueNumber;
   };
 
   const refreshTaskStatuses = async (ctx: ExtensionContext, signal?: AbortSignal) => {
@@ -363,10 +399,40 @@ export default function (pi: ExtensionAPI) {
           }
 
           if (params.index === undefined) {
-            return {
-              content: [{ type: "text", text: `Workflow phase update noted: ${params.status}` }],
-              details: { action: "update", tasks: [...tasks], kata: { ...kata } } as PlanTrackerDetails,
-            };
+            const phase = currentWorkflowPhase(ctx);
+            if (!phase) {
+              const message = "index required for kata task updates when no workflow phase is active";
+              return {
+                content: [{ type: "text", text: `Error: ${message}` }],
+                details: failDetails("update", message),
+              };
+            }
+
+            try {
+              const issueNumber = await ensurePhaseIssue(ctx, phase, signal);
+              if (params.status === "complete") {
+                await ensureKataSuccess(ctx, ["close", String(issueNumber), "--reason", "done"], signal);
+              } else {
+                await ensureKataSuccess(ctx, ["reopen", String(issueNumber)], signal);
+                if (params.status === "in_progress") {
+                  await ensureKataSuccess(ctx, ["label", "add", String(issueNumber), "pi:in-progress"], signal);
+                } else {
+                  await ensureKataSuccess(ctx, ["label", "rm", String(issueNumber), "pi:in-progress"], signal);
+                }
+              }
+              return {
+                content: [
+                  { type: "text", text: `Workflow phase ${phase} → ${params.status} in kata (#${issueNumber})` },
+                ],
+                details: { action: "update", tasks: [...tasks], kata: { ...kata } } as PlanTrackerDetails,
+              };
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              return {
+                content: [{ type: "text", text: `Error: ${message}` }],
+                details: failDetails("update", message),
+              };
+            }
           }
 
           if (tasks.length === 0) {

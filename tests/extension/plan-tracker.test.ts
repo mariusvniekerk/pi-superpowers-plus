@@ -157,6 +157,50 @@ describe("kata-backed plan_tracker", () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
+  test("no-index update records the current workflow phase in kata", async () => {
+    const fake = createFakePi([{ stdout: kataIssue(90, "Workflow phase: brainstorm") }, { stdout: kataIssue(90) }]);
+    planTrackerExtension(fake.api as any);
+
+    const result = await getPlanTracker(fake).execute(
+      "phase-call-1",
+      { action: "update", status: "complete" },
+      undefined,
+      undefined,
+      {
+        cwd: "/repo",
+        hasUI: false,
+        sessionManager: {
+          getBranch: () => [
+            {
+              type: "custom",
+              customType: "superpowers_state",
+              data: { workflow: { currentPhase: "brainstorm" } },
+            },
+          ],
+        },
+      },
+    );
+
+    expectKataCall(fake.execCalls[0]!, [
+      "--workspace",
+      "/repo",
+      "--json",
+      "create",
+      "Workflow phase: brainstorm",
+      "--body",
+      "Workflow phase status managed by pi-superpowers-plus.",
+      "--label",
+      "pi-phase",
+    ]);
+    expect(fake.execCalls[0]!.args).toContain("--idempotency-key");
+    expect(fake.execCalls[1]).toMatchObject({
+      command: "kata",
+      args: ["--workspace", "/repo", "--json", "close", "90", "--reason", "done"],
+    });
+    expect(result.details.kata.phaseIssueNumbers.brainstorm).toBe(90);
+    expect(result.content[0].text).toContain("Workflow phase brainstorm → complete in kata (#90)");
+  });
+
   test("complete update closes the mapped kata task issue", async () => {
     const fake = createFakePi([
       { stdout: kataIssue(20, "Plan") },
