@@ -231,24 +231,28 @@ export default function (pi: ExtensionAPI) {
     return issueNumber;
   };
 
+  const refreshTaskFromKata = async (ctx: ExtensionContext, task: Task, signal?: AbortSignal): Promise<Task> => {
+    if (!task.issueNumber) {
+      throw new Error(`missing kata issue mapping for task "${task.name}"; re-run plan_tracker init`);
+    }
+    const result = await runKata(ctx, ["show", String(task.issueNumber)], signal);
+    const payload = parseKataJson(result.stdout, result.stderr);
+    if (result.code !== 0 || payload.error) {
+      throw new Error(
+        kataErrorMessage(payload, `kata exited with code ${result.code}`, kata.workspace || workspaceFrom(ctx)),
+      );
+    }
+    return {
+      ...task,
+      name: payload.issue?.title ?? task.name,
+      status: statusFromKata(payload),
+    };
+  };
+
   const refreshTaskStatuses = async (ctx: ExtensionContext, signal?: AbortSignal) => {
     const refreshed: Task[] = [];
     for (const task of tasks) {
-      if (!task.issueNumber) {
-        throw new Error(`missing kata issue mapping for task "${task.name}"; re-run plan_tracker init`);
-      }
-      const result = await runKata(ctx, ["show", String(task.issueNumber)], signal);
-      const payload = parseKataJson(result.stdout, result.stderr);
-      if (result.code !== 0 || payload.error) {
-        throw new Error(
-          kataErrorMessage(payload, `kata exited with code ${result.code}`, kata.workspace || workspaceFrom(ctx)),
-        );
-      }
-      refreshed.push({
-        ...task,
-        name: payload.issue?.title ?? task.name,
-        status: statusFromKata(payload),
-      });
+      refreshed.push(await refreshTaskFromKata(ctx, task, signal));
     }
     tasks = refreshed;
   };
@@ -483,6 +487,9 @@ export default function (pi: ExtensionAPI) {
             };
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
+            try {
+              tasks[params.index] = await refreshTaskFromKata(ctx, task, signal);
+            } catch {}
             return {
               content: [{ type: "text", text: `Error: ${message}` }],
               details: failDetails("update", message),

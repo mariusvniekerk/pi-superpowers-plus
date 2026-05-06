@@ -359,12 +359,13 @@ describe("kata-backed plan_tracker", () => {
     ).toBe(true);
   });
 
-  test("pending update reports in-progress label removal failures", async () => {
+  test("pending update refreshes durable kata state after label removal failures", async () => {
     const fake = createFakePi([
       { stdout: kataIssue(80, "Plan") },
       { stdout: kataIssue(81) },
       { stdout: kataIssue(81) },
       { stdout: '{"error":{"message":"label removal failed"}}', code: 1 },
+      { stdout: kataIssue(81, "Task 1: Setup", "open", ["pi:in-progress"]) },
     ]);
     planTrackerExtension(fake.api as any);
     const tool = getPlanTracker(fake);
@@ -385,7 +386,34 @@ describe("kata-backed plan_tracker", () => {
     );
 
     expect(result.details.error).toContain("label removal failed");
-    expect(result.details.tasks[0]).toMatchObject({ status: "pending", issueNumber: 81 });
+    expect(result.details.tasks[0]).toMatchObject({ status: "in_progress", issueNumber: 81 });
+  });
+
+  test("complete update refreshes durable kata state after label removal failures", async () => {
+    const fake = createFakePi([
+      { stdout: kataIssue(82, "Plan") },
+      { stdout: kataIssue(83) },
+      { stdout: kataIssue(83, "Task 1: Setup", "closed") },
+      { stdout: '{"error":{"message":"label removal failed"}}', code: 1 },
+      { stdout: kataIssue(83, "Task 1: Setup", "closed", ["pi:in-progress"]) },
+    ]);
+    planTrackerExtension(fake.api as any);
+    const tool = getPlanTracker(fake);
+
+    await tool.execute("call-1", { action: "init", tasks: ["Task 1: Setup"] }, undefined, undefined, {
+      cwd: "/repo",
+      hasUI: false,
+    });
+    const result = await tool.execute(
+      "call-2",
+      { action: "update", index: 0, status: "complete" },
+      undefined,
+      undefined,
+      { cwd: "/repo", hasUI: false },
+    );
+
+    expect(result.details.error).toContain("label removal failed");
+    expect(result.details.tasks[0]).toMatchObject({ status: "complete", issueNumber: 83 });
   });
 
   test("status reports missing kata issue mappings", async () => {
