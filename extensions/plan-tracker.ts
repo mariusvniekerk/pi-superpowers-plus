@@ -350,6 +350,7 @@ export default function (pi: ExtensionAPI) {
           const canResumePartialPlan =
             kata.parentIssueNumber !== undefined &&
             tasks.length > 0 &&
+            tasks.length <= params.tasks.length &&
             params.tasks.every((name, index) => tasks[index] === undefined || tasks[index].name === name);
           tasks = canResumePartialPlan ? tasks.map((task) => ({ ...task })) : [];
           kata = canResumePartialPlan ? cloneKata() : { workspace: workspaceFrom(ctx) };

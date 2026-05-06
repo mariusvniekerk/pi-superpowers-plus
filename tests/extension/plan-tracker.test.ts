@@ -243,6 +243,30 @@ describe("kata-backed plan_tracker", () => {
     expectKataCall(fake.execCalls[1]!, ["--workspace", "/good-repo", "--json", "create", "Workflow phase: brainstorm"]);
   });
 
+  test("init with shorter task list does not resume stale trailing task mappings", async () => {
+    const fake = createFakePi([
+      { stdout: kataIssue(120, "Plan") },
+      { stdout: kataIssue(121, "Task 1: Setup") },
+      { stdout: kataIssue(122, "Task 2: Core") },
+      { stdout: kataIssue(130, "Plan") },
+      { stdout: kataIssue(131, "Task 1: Setup") },
+    ]);
+    planTrackerExtension(fake.api as any);
+    const tool = getPlanTracker(fake);
+
+    await tool.execute("call-1", { action: "init", tasks: ["Task 1: Setup", "Task 2: Core"] }, undefined, undefined, {
+      cwd: "/repo",
+      hasUI: false,
+    });
+    const result = await tool.execute("call-2", { action: "init", tasks: ["Task 1: Setup"] }, undefined, undefined, {
+      cwd: "/repo",
+      hasUI: false,
+    });
+
+    expect(result.details.kata.parentIssueNumber).toBe(130);
+    expect(result.details.tasks.map((task: any) => task.issueNumber)).toEqual([131]);
+  });
+
   test("init retry resumes partial kata plan after child creation failure", async () => {
     const fake = createFakePi([
       { stdout: kataIssue(110, "Plan") },
