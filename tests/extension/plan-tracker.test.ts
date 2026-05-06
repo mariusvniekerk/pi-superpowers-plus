@@ -228,7 +228,7 @@ describe("kata-backed plan_tracker", () => {
       ],
     };
 
-    await tool.execute("phase-call-1", { action: "update", status: "complete" }, undefined, undefined, {
+    const failed = await tool.execute("phase-call-1", { action: "update", status: "complete" }, undefined, undefined, {
       cwd: "/bad-repo",
       hasUI: false,
       sessionManager,
@@ -239,7 +239,53 @@ describe("kata-backed plan_tracker", () => {
       sessionManager,
     });
 
+    expect(failed.details.kata.phaseIssueNumbers).toBeUndefined();
     expectKataCall(fake.execCalls[1]!, ["--workspace", "/good-repo", "--json", "create", "Workflow phase: brainstorm"]);
+  });
+
+  test("init retry resumes partial kata plan after child creation failure", async () => {
+    const fake = createFakePi([
+      { stdout: kataIssue(110, "Plan") },
+      { stdout: kataIssue(111, "Task 1: Setup") },
+      { stdout: '{"error":{"message":"child creation failed"}}', code: 1 },
+      { stdout: kataIssue(112, "Task 2: Core") },
+    ]);
+    planTrackerExtension(fake.api as any);
+    const tool = getPlanTracker(fake);
+
+    const failed = await tool.execute(
+      "call-1",
+      { action: "init", tasks: ["Task 1: Setup", "Task 2: Core"] },
+      undefined,
+      undefined,
+      { cwd: "/repo", hasUI: false },
+    );
+    const retried = await tool.execute(
+      "call-2",
+      { action: "init", tasks: ["Task 1: Setup", "Task 2: Core"] },
+      undefined,
+      undefined,
+      { cwd: "/repo", hasUI: false },
+    );
+
+    expect(failed.details.error).toContain("child creation failed");
+    expect(failed.details.kata.parentIssueNumber).toBe(110);
+    expect(failed.details.tasks.map((task: any) => task.issueNumber)).toEqual([111]);
+    expectKataCall(fake.execCalls[3]!, [
+      "--workspace",
+      "/repo",
+      "--json",
+      "create",
+      "Task 2: Core",
+      "--body",
+      "Tracked by pi-superpowers-plus plan #110.",
+      "--label",
+      "pi-task",
+      "--parent",
+      "110",
+    ]);
+    expect(retried.details.kata.parentIssueNumber).toBe(110);
+    expect(retried.details.tasks.map((task: any) => task.issueNumber)).toEqual([111, 112]);
   });
 
   test("phase issue updates keep using the workspace captured on first phase update", async () => {

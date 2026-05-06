@@ -172,6 +172,19 @@ export default function (pi: ExtensionAPI) {
   let tasks: Task[] = [];
   let kata: KataTrackerState = {};
 
+  const cloneTasks = () => tasks.map((task) => ({ ...task }));
+  const cloneKata = (): KataTrackerState => ({
+    ...kata,
+    phaseIssueNumbers: kata.phaseIssueNumbers ? { ...kata.phaseIssueNumbers } : undefined,
+  });
+
+  const details = (action: PlanTrackerDetails["action"], error?: string): PlanTrackerDetails => ({
+    action,
+    tasks: cloneTasks(),
+    kata: cloneKata(),
+    ...(error ? { error } : {}),
+  });
+
   const runKata = async (ctx: ExtensionContext, args: string[], signal?: AbortSignal, workspace = kata.workspace) => {
     const targetWorkspace = workspace || workspaceFrom(ctx);
     return pi.exec("kata", ["--workspace", targetWorkspace, "--json", ...args], {
@@ -191,12 +204,8 @@ export default function (pi: ExtensionAPI) {
     return payload;
   };
 
-  const failDetails = (action: PlanTrackerDetails["action"], error: string): PlanTrackerDetails => ({
-    action,
-    tasks: [...tasks],
-    kata: { ...kata },
-    error,
-  });
+  const failDetails = (action: PlanTrackerDetails["action"], error: string): PlanTrackerDetails =>
+    details(action, error);
 
   const createIssue = async (ctx: ExtensionContext, args: string[], signal?: AbortSignal) => {
     const payload = await ensureKataSuccess(ctx, args, signal);
@@ -209,6 +218,7 @@ export default function (pi: ExtensionAPI) {
 
   const ensurePhaseIssue = async (ctx: ExtensionContext, phase: string, signal?: AbortSignal) => {
     const previousWorkspace = kata.workspace;
+    const previousPhaseIssueNumbers = kata.phaseIssueNumbers ? { ...kata.phaseIssueNumbers } : undefined;
     kata.workspace ??= workspaceFrom(ctx);
     kata.phaseIssueNumbers ??= {};
     const existing = kata.phaseIssueNumbers[phase];
@@ -234,6 +244,7 @@ export default function (pi: ExtensionAPI) {
       return issueNumber;
     } catch (error) {
       kata.workspace = previousWorkspace;
+      kata.phaseIssueNumbers = previousPhaseIssueNumbers;
       throw error;
     }
   };
@@ -336,30 +347,39 @@ export default function (pi: ExtensionAPI) {
 
           const previousTasks = tasks;
           const previousKata = kata;
-          tasks = [];
-          kata = { workspace: workspaceFrom(ctx) };
+          const canResumePartialPlan =
+            kata.parentIssueNumber !== undefined &&
+            tasks.length > 0 &&
+            params.tasks.every((name, index) => tasks[index] === undefined || tasks[index].name === name);
+          tasks = canResumePartialPlan ? tasks.map((task) => ({ ...task })) : [];
+          kata = canResumePartialPlan ? cloneKata() : { workspace: workspaceFrom(ctx) };
+          const nextTasks: Task[] = canResumePartialPlan ? tasks.map((task) => ({ ...task })) : [];
 
           try {
             const planTitle = titleForPlan(params.tasks);
-            const parentIssueNumber = await createIssue(
-              ctx,
-              [
-                "create",
-                planTitle,
-                "--body",
-                "Task plan managed by pi-superpowers-plus.",
-                "--label",
-                "pi-plan",
-                "--idempotency-key",
-                idempotencyKey("plan", [toolCallId, planTitle, ...params.tasks]),
-              ],
-              signal,
-            );
+            const parentIssueNumber =
+              kata.parentIssueNumber ??
+              (await createIssue(
+                ctx,
+                [
+                  "create",
+                  planTitle,
+                  "--body",
+                  "Task plan managed by pi-superpowers-plus.",
+                  "--label",
+                  "pi-plan",
+                  "--idempotency-key",
+                  idempotencyKey("plan", [toolCallId, planTitle, ...params.tasks]),
+                ],
+                signal,
+              ));
             kata.parentIssueNumber = parentIssueNumber;
 
-            const nextTasks: Task[] = [];
             for (let index = 0; index < params.tasks.length; index++) {
               const name = params.tasks[index];
+              const existingTask = nextTasks[index];
+              if (existingTask?.name === name && existingTask.issueNumber) continue;
+
               const issueNumber = await createIssue(
                 ctx,
                 [
@@ -376,7 +396,7 @@ export default function (pi: ExtensionAPI) {
                 ],
                 signal,
               );
-              nextTasks.push({ name, status: "pending", issueNumber });
+              nextTasks[index] = { name, status: "pending", issueNumber };
             }
             tasks = nextTasks;
             updateWidget(ctx);
@@ -387,12 +407,16 @@ export default function (pi: ExtensionAPI) {
                   text: `Plan initialized with ${tasks.length} tasks in kata (#${parentIssueNumber}).\n${formatStatus(tasks)}`,
                 },
               ],
-              details: { action: "init", tasks: [...tasks], kata: { ...kata } } as PlanTrackerDetails,
+              details: details("init"),
             };
           } catch (error) {
-            tasks = previousTasks;
-            kata = previousKata;
             const message = error instanceof Error ? error.message : String(error);
+            if (kata.parentIssueNumber || nextTasks.length > 0) {
+              tasks = nextTasks;
+            } else {
+              tasks = previousTasks;
+              kata = previousKata;
+            }
             updateWidget(ctx);
             return {
               content: [{ type: "text", text: `Error: ${message}` }],
@@ -436,7 +460,7 @@ export default function (pi: ExtensionAPI) {
                 content: [
                   { type: "text", text: `Workflow phase ${phase} → ${params.status} in kata (#${issueNumber})` },
                 ],
-                details: { action: "update", tasks: [...tasks], kata: { ...kata } } as PlanTrackerDetails,
+                details: details("update"),
               };
             } catch (error) {
               const message = error instanceof Error ? error.message : String(error);
@@ -491,7 +515,7 @@ export default function (pi: ExtensionAPI) {
                   text: `Task ${params.index} "${formatTaskLabel(tasks[params.index])}" → ${params.status}\n${formatStatus(tasks)}`,
                 },
               ],
-              details: { action: "update", tasks: [...tasks], kata: { ...kata } } as PlanTrackerDetails,
+              details: details("update"),
             };
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -512,7 +536,7 @@ export default function (pi: ExtensionAPI) {
             updateWidget(ctx);
             return {
               content: [{ type: "text", text: formatStatus(tasks) }],
-              details: { action: "status", tasks: [...tasks], kata: { ...kata } } as PlanTrackerDetails,
+              details: details("status"),
             };
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
