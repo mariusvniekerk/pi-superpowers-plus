@@ -208,28 +208,34 @@ export default function (pi: ExtensionAPI) {
   };
 
   const ensurePhaseIssue = async (ctx: ExtensionContext, phase: string, signal?: AbortSignal) => {
+    const previousWorkspace = kata.workspace;
     kata.workspace ??= workspaceFrom(ctx);
     kata.phaseIssueNumbers ??= {};
     const existing = kata.phaseIssueNumbers[phase];
     if (existing) return existing;
 
     const title = `Workflow phase: ${phase}`;
-    const issueNumber = await createIssue(
-      ctx,
-      [
-        "create",
-        title,
-        "--body",
-        "Workflow phase status managed by pi-superpowers-plus.",
-        "--label",
-        "pi-phase",
-        "--idempotency-key",
-        idempotencyKey("phase", [phase, title]),
-      ],
-      signal,
-    );
-    kata.phaseIssueNumbers[phase] = issueNumber;
-    return issueNumber;
+    try {
+      const issueNumber = await createIssue(
+        ctx,
+        [
+          "create",
+          title,
+          "--body",
+          "Workflow phase status managed by pi-superpowers-plus.",
+          "--label",
+          "pi-phase",
+          "--idempotency-key",
+          idempotencyKey("phase", [phase, title]),
+        ],
+        signal,
+      );
+      kata.phaseIssueNumbers[phase] = issueNumber;
+      return issueNumber;
+    } catch (error) {
+      kata.workspace = previousWorkspace;
+      throw error;
+    }
   };
 
   const refreshTaskFromKata = async (ctx: ExtensionContext, task: Task, signal?: AbortSignal): Promise<Task> => {

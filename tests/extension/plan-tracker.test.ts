@@ -209,6 +209,39 @@ describe("kata-backed plan_tracker", () => {
     expect(result.content[0].text).toContain("Workflow phase brainstorm → complete in kata (#90)");
   });
 
+  test("failed phase issue creation does not anchor future retries to the failed workspace", async () => {
+    const fake = createFakePi([
+      { stdout: '{"error":{"message":"create failed"}}', code: 1 },
+      { stdout: kataIssue(92, "Workflow phase: brainstorm") },
+      { stdout: kataIssue(92) },
+      { stdout: kataIssue(92) },
+    ]);
+    planTrackerExtension(fake.api as any);
+    const tool = getPlanTracker(fake);
+    const sessionManager = {
+      getBranch: () => [
+        {
+          type: "custom",
+          customType: "superpowers_state",
+          data: { workflow: { currentPhase: "brainstorm" } },
+        },
+      ],
+    };
+
+    await tool.execute("phase-call-1", { action: "update", status: "complete" }, undefined, undefined, {
+      cwd: "/bad-repo",
+      hasUI: false,
+      sessionManager,
+    });
+    await tool.execute("phase-call-2", { action: "update", status: "complete" }, undefined, undefined, {
+      cwd: "/good-repo",
+      hasUI: false,
+      sessionManager,
+    });
+
+    expectKataCall(fake.execCalls[1]!, ["--workspace", "/good-repo", "--json", "create", "Workflow phase: brainstorm"]);
+  });
+
   test("phase issue updates keep using the workspace captured on first phase update", async () => {
     const fake = createFakePi([
       { stdout: kataIssue(91, "Workflow phase: brainstorm") },
