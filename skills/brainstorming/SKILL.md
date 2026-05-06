@@ -5,6 +5,10 @@ description: "You MUST use this before any creative work - creating features, bu
 
 > **Related skills:** Consider `/skill:using-git-worktrees` to set up an isolated workspace, then `/skill:writing-plans` for implementation planning.
 
+## Kata Task Tracking
+
+`plan_tracker` is kata-backed. `init` creates a kata parent issue plus child issues for each task in the current project workspace (`ctx.cwd`). `update` changes the mapped kata issue status. `status` refreshes from kata. `clear` only clears the local widget/session mapping; it never deletes or purges kata issues. If kata reports the workspace is not initialized, stop and ask the user to run `kata init` for that project. Never run `kata delete` or `kata purge` unless the user explicitly asks for that exact destructive action and issue number.
+
 # Brainstorming Ideas Into Designs
 
 Help turn ideas into fully formed designs and specs through natural collaborative dialogue.
@@ -126,7 +130,7 @@ After the spec review loop passes, ask the user to review the written spec befor
 
 If the user requests changes, update the spec, commit the updated spec, and re-run the review loop. Only continue once the user approves.
 
-Then mark the brainstorm phase complete: call `plan_tracker` with `{action: "update", status: "complete"}` for the current phase.
+Then mark the brainstorm phase complete with the workflow shorthand: call `plan_tracker` with `{action: "update", status: "complete"}` for the current phase.
 
 **Implementation (if continuing):**
 - Ask: "Ready to set up for implementation?"

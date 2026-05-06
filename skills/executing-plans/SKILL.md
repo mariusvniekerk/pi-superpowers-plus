@@ -17,6 +17,10 @@ Load plan, review critically, execute tasks in batches, report for review betwee
 
 If a tool result contains a ⚠️ workflow warning, stop immediately and address it before continuing.
 
+## Kata Task Tracking
+
+`plan_tracker` is kata-backed. `init` creates a kata parent issue plus child issues for each task in the current project workspace (`ctx.cwd`). `update` changes the mapped kata issue status. `status` refreshes from kata. `clear` only clears the local widget/session mapping; it never deletes or purges kata issues. If kata reports the workspace is not initialized, stop and ask the user to run `kata init` for that project. Never run `kata delete` or `kata purge` unless the user explicitly asks for that exact destructive action and issue number.
+
 ## Prerequisites
 - Active branch (not main) or user-confirmed intent to work on main
 - Approved plan or clear task scope
@@ -27,16 +31,16 @@ If a tool result contains a ⚠️ workflow warning, stop immediately and addres
 1. Read plan file
 2. Review critically - identify any questions or concerns about the plan
 3. If concerns: Raise them with your human partner before starting
-4. If no concerns: Initialize the `plan_tracker` tool and proceed
+4. If no concerns: Initialize the kata-backed `plan_tracker` tool and proceed
 
 ### Step 2: Execute Batch
 **Default: First 3 tasks**
 
 For each task:
-1. Update task status via `plan_tracker` tool
+1. Update task status via kata-backed `plan_tracker` tool
 2. Follow each step exactly (plan has bite-sized steps)
 3. Run verifications as specified
-4. Update task status via `plan_tracker` tool
+4. Update task status via kata-backed `plan_tracker` tool
 
 ### Step 3: Report
 When batch complete:

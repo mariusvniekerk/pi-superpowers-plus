@@ -10,6 +10,10 @@ description: >
 > **Related skills:** Need a plan first? `/skill:writing-plans`. Done? `/skill:finishing-a-development-branch`.
 > **Alternative workflows:** Subagents implement? `/skill:subagent-driven-development`. Parallel sessions? `/skill:executing-plans`.
 
+## Kata Task Tracking
+
+`plan_tracker` is kata-backed. `init` creates a kata parent issue plus child issues for each task in the current project workspace (`ctx.cwd`). `update` changes the mapped kata issue status. `status` refreshes from kata. `clear` only clears the local widget/session mapping; it never deletes or purges kata issues. If kata reports the workspace is not initialized, stop and ask the user to run `kata init` for that project. Never run `kata delete` or `kata purge` unless the user explicitly asks for that exact destructive action and issue number.
+
 # Orchestrator Implements
 
 The orchestrator (main LLM) implements all tasks directly, dispatching subagent reviewers for quality assurance after each task. Single human interaction before execution begins.
@@ -111,7 +115,7 @@ digraph process {
 1. Read plan file
 2. Review critically — identify questions or concerns
 3. If concerns: ask the human before starting
-4. Initialize `plan_tracker` with all tasks
+4. Initialize kata-backed `plan_tracker` with all tasks
 
 ### Step 2: Human Checkpoint (only if needed)
 

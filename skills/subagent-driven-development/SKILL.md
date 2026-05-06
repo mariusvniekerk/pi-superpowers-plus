@@ -13,6 +13,10 @@ Execute plan by dispatching fresh upstream `pi-subagents` per task, with two-sta
 
 If a tool result contains a ⚠️ workflow warning, stop immediately and address it before continuing.
 
+## Kata Task Tracking
+
+`plan_tracker` is kata-backed. `init` creates a kata parent issue plus child issues for each task in the current project workspace (`ctx.cwd`). `update` changes the mapped kata issue status. `status` refreshes from kata. `clear` only clears the local widget/session mapping; it never deletes or purges kata issues. If kata reports the workspace is not initialized, stop and ask the user to run `kata init` for that project. Never run `kata delete` or `kata purge` unless the user explicitly asks for that exact destructive action and issue number.
+
 ## Prerequisites
 - Active branch (not main) or user-confirmed intent to work on main
 - Approved plan or clear task scope
@@ -236,7 +240,7 @@ You: I'm using Subagent-Driven Development to execute this plan.
 
 [Read plan file once: docs/plans/feature-plan.md]
 [Extract all 5 tasks with full text and context]
-[Initialize plan_tracker tool with all tasks]
+[Initialize kata-backed plan_tracker tool with all tasks]
 
 Task 1: Hook installation script
 

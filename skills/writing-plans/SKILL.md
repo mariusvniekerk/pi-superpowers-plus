@@ -5,6 +5,10 @@ description: Use when you have a spec or requirements for a multi-step task, bef
 
 > **Related skills:** Did you `/skill:brainstorming` first? Ready to implement? Use `/skill:orchestrator-implements`, `/skill:subagent-driven-development`, or `/skill:executing-plans`.
 
+## Kata Task Tracking
+
+`plan_tracker` is kata-backed. `init` creates a kata parent issue plus child issues for each task in the current project workspace (`ctx.cwd`). `update` changes the mapped kata issue status. `status` refreshes from kata. `clear` only clears the local widget/session mapping; it never deletes or purges kata issues. If kata reports the workspace is not initialized, stop and ask the user to run `kata init` for that project. Never run `kata delete` or `kata purge` unless the user explicitly asks for that exact destructive action and issue number.
+
 # Writing Plans
 
 ## Overview
@@ -142,7 +146,7 @@ Se encontrar problemas, corrija inline. Não é necessário re-revisar — apena
 
 ## Execution Handoff
 
-After saving the plan, mark the planning phase complete: call `plan_tracker` with `{action: "update", status: "complete"}` for the current phase.
+After saving the plan, mark the planning phase complete with the workflow shorthand: call `plan_tracker` with `{action: "update", status: "complete"}` for the current phase.
 
 Then offer execution choice:
 

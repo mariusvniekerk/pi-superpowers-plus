@@ -78,4 +78,17 @@ describe("workflow skill content", () => {
   test("brainstorming requires recommitting spec changes after review feedback", () => {
     expect(read("skills/brainstorming/SKILL.md")).toMatch(/commit the updated spec/i);
   });
+
+  test("workflow skills describe kata-backed task tracking", () => {
+    for (const skill of [
+      "skills/executing-plans/SKILL.md",
+      "skills/subagent-driven-development/SKILL.md",
+      "skills/orchestrator-implements/SKILL.md",
+      "skills/writing-plans/SKILL.md",
+    ]) {
+      const content = read(skill);
+      expect(content).toContain("`plan_tracker` is kata-backed");
+      expect(content).toContain("Never run `kata delete` or `kata purge`");
+    }
+  });
 });

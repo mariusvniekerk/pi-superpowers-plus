@@ -13,7 +13,7 @@ Your coding agent doesn't just know the rules - it follows them. Skills teach th
 **3 local extensions** that run silently in the background, plus upstream `pi-subagents` entrypoints activated automatically:
 - **Workflow Monitor** — warns on TDD violations, tracks debug cycles, gates commits on verification, tracks workflow phase, and serves reference content on demand.
 - **Pi-Subagents Agent Sync** — installs this package's managed `spx-*` agent definitions into Pi's user agent directory so upstream `pi-subagents` can discover them.
-- **Plan Tracker** — tracks task progress with a TUI widget.
+- **Kata-backed Plan Tracker** — tracks task progress with kata issues and a TUI widget.
 
 **After installation**:
 - Any time the agent writes a source file without a failing test, it gets a warning injected into the tool result.
@@ -96,7 +96,7 @@ If you're currently using [`pi-superpowers`](https://github.com/coctostan/pi-sup
 - **Workflow tracking + boundary prompts** (and `/workflow-next` handoff)
 - **Branch safety reminders** (first tool result shows current branch/SHA; first write/edit warns to confirm branch/worktree)
 - **Finish-phase reminder prefill** (docs + learnings)
-- **Plan Tracker tool** (`plan_tracker`) for task lists + TUI progress
+- **Kata-backed Plan Tracker tool** (`plan_tracker`) for task lists + TUI progress
 
 ### Migration
 Replace `pi-superpowers` with `pi-superpowers-plus` in your config:
@@ -117,7 +117,7 @@ Notes:
 - **Extensions** enforce behavior *while you work* (TDD/Debug/Verification monitors, branch safety notices) — runtime warnings complement inline skill guidance.
 - **Three-scenario TDD** — skills, agent profiles, and plan templates all use the same model: new feature (full TDD), modifying tested code (run existing tests), trivial change (use judgment). Runtime warnings are advisory nudges, not hard blocks.
 - The **TUI** shows state (workflow/TDD) and prompts at boundaries.
-- Tools like **`plan_tracker`** store execution state outside the prompt.
+- Tools like **`plan_tracker`** store only lightweight session mappings outside the prompt while durable task state lives in kata.
 - **`workflow_reference`** provides extended detail on demand, keeping skill files focused while making deep guidance available when the agent needs it.
 
 To make this concrete, here's the size of each skill's `SKILL.md` compared to the original [`coctostan/pi-superpowers`](https://github.com/coctostan/pi-superpowers) (approximate KB, at time of writing). Across the shared skills, total `SKILL.md` content went from **67.5KB → 66.5KB**. Skills that shrank moved content into on-demand `workflow_reference` topics; skills that grew restored inline red flags, rationalizations, and verification checklists for self-contained guidance.
@@ -254,18 +254,20 @@ workflow_reference({ topic: "debug-condition-waiting" })  - Replace timeouts wit
 
 ### Plan Tracker
 
-The `plan_tracker` tool stores task state in the session and shows progress in the TUI:
+The `plan_tracker` tool uses kata as the durable task ledger and shows progress in the TUI. It operates in the current project workspace (`ctx.cwd`), so each project needs its own `kata init`.
 
 ```
-Tasks: ✓✓→○○ (2/5)  Task 3: Recovery modes
+Kata Tasks: ✓✓→○○ (2/5)  #42 Task 3: Recovery modes
 ```
 
 ```
-plan_tracker({ action: "init", tasks: ["Task 1: Setup", "Task 2: Core", ...] })
-plan_tracker({ action: "update", index: 0, status: "complete" })
-plan_tracker({ action: "status" })
-plan_tracker({ action: "clear" })
+plan_tracker({ action: "init", tasks: ["Task 1: Setup", "Task 2: Core", ...] }) // creates kata parent + child issues
+plan_tracker({ action: "update", index: 0, status: "complete" })              // closes mapped kata issue
+plan_tracker({ action: "status" })                                            // refreshes from kata
+plan_tracker({ action: "clear" })                                             // clears widget/session mapping only
 ```
+
+`clear` never deletes or purges kata issues. Destructive kata operations must be user-requested explicitly.
 
 ## How Skills and Extensions Work Together
 
@@ -365,7 +367,7 @@ Based on [Superpowers](https://github.com/obra/superpowers) by Jesse Vincent, po
 | **TDD in subagents** | — | — | Three-scenario TDD instructions in agent profiles + prompt templates + runtime warnings |
 | **Structured results** | — | — | Prompt-level structured sections + repair loop |
 | **Reference content** | Everything in SKILL.md | Everything in SKILL.md | Inline guidance + on-demand `workflow_reference` tool for extended detail |
-| **Plan tracker** | — | — | `plan_tracker` tool with TUI progress widget |
+| **Plan tracker** | — | — | kata-backed `plan_tracker` tool with TUI progress widget |
 
 ## Architecture
 
@@ -385,7 +387,7 @@ pi-superpowers-plus/
 ├── extensions/
 │   ├── logging.ts                     # File-based diagnostic logger (10KB truncation, time-based rotation)
 │   ├── pi-subagents-agent-sync.ts     # Managed spx-* agent installation hook
-│   ├── plan-tracker.ts                # Task tracking tool + TUI widget
+│   ├── plan-tracker.ts                # Kata-backed task tracking tool + TUI widget
 │   ├── workflow-monitor.ts            # Extension entry point (event wiring)
 │   ├── workflow-monitor/
 │   │   ├── tdd-monitor.ts             # TDD phase state machine

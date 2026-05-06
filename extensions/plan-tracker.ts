@@ -1,11 +1,12 @@
 /**
- * Plan Tracker Extension
+ * Kata-backed Plan Tracker Extension
  *
- * A native pi tool for tracking plan progress.
- * State is stored in tool result details for proper branching support.
- * Shows a persistent TUI widget above the editor.
+ * A native pi tool for tracking plan progress through kata.
+ * The session stores only the kata issue mapping for branching support.
+ * Kata remains the durable task ledger for the current project workspace.
  */
 
+import { createHash } from "node:crypto";
 import { StringEnum } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
@@ -17,12 +18,34 @@ type TaskStatus = "pending" | "in_progress" | "complete";
 interface Task {
   name: string;
   status: TaskStatus;
+  issueNumber?: number;
+}
+
+interface KataTrackerState {
+  workspace?: string;
+  parentIssueNumber?: number;
 }
 
 interface PlanTrackerDetails {
   action: "init" | "update" | "status" | "clear";
   tasks: Task[];
+  kata?: KataTrackerState;
   error?: string;
+}
+
+interface KataIssuePayload {
+  issue?: {
+    number?: number;
+    title?: string;
+    status?: string;
+  };
+  error?: {
+    code?: string;
+    message?: string;
+  };
+  labels?: Array<{
+    label?: string;
+  }>;
 }
 
 const PlanTrackerParams = Type.Object({
@@ -66,15 +89,18 @@ function formatWidget(tasks: Task[], theme: Theme): string {
     })
     .join("");
 
-  // Find current task (first in_progress, or first pending)
   const current = tasks.find((t) => t.status === "in_progress") ?? tasks.find((t) => t.status === "pending");
-  const currentName = current ? `  ${current.name}` : "";
+  const currentName = current ? `  ${formatTaskLabel(current)}` : "";
 
-  return `${theme.fg("muted", "Tasks:")} ${icons} ${theme.fg("muted", `(${complete}/${tasks.length})`)}${currentName}`;
+  return `${theme.fg("muted", "Kata Tasks:")} ${icons} ${theme.fg("muted", `(${complete}/${tasks.length})`)}${currentName}`;
+}
+
+function formatTaskLabel(task: Task): string {
+  return task.issueNumber ? `#${task.issueNumber} ${task.name}` : task.name;
 }
 
 function formatStatus(tasks: Task[]): string {
-  if (tasks.length === 0) return "No plan active.";
+  if (tasks.length === 0) return "No kata-backed plan active.";
 
   const complete = tasks.filter((t) => t.status === "complete").length;
   const inProgress = tasks.filter((t) => t.status === "in_progress").length;
@@ -86,16 +112,114 @@ function formatStatus(tasks: Task[]): string {
   for (let i = 0; i < tasks.length; i++) {
     const t = tasks[i];
     const icon = t.status === "complete" ? "✓" : t.status === "in_progress" ? "→" : "○";
-    lines.push(`  ${icon} [${i}] ${t.name}`);
+    lines.push(`  ${icon} [${i}] ${formatTaskLabel(t)}`);
   }
   return lines.join("\n");
 }
 
+function titleForPlan(taskNames: string[]): string {
+  const first = taskNames[0] ?? "Tasks";
+  const extra = taskNames.length > 1 ? ` (+${taskNames.length - 1} more)` : "";
+  return `Plan: ${first}${extra}`;
+}
+
+function workspaceFrom(ctx: ExtensionContext): string {
+  return ctx.cwd || process.cwd();
+}
+
+function parseKataJson(stdout: string, stderr: string): KataIssuePayload {
+  const raw = stdout.trim() || stderr.trim() || "{}";
+  try {
+    return JSON.parse(raw) as KataIssuePayload;
+  } catch {
+    return { error: { message: raw || "kata returned invalid JSON" } };
+  }
+}
+
+function kataErrorMessage(payload: KataIssuePayload, fallback: string, workspace: string): string {
+  const message = payload.error?.message || fallback;
+  if (payload.error?.code === "project_not_initialized" || message.includes("project is attached")) {
+    return `kata project is not initialized for ${workspace}. Run \`kata init\` in ${workspace} and retry.`;
+  }
+  return message;
+}
+
+function statusFromKata(payload: KataIssuePayload): TaskStatus {
+  if (payload.issue?.status === "closed") return "complete";
+  const labels = new Set((payload.labels ?? []).map((label) => label.label));
+  if (labels.has("pi:in-progress")) return "in_progress";
+  return "pending";
+}
+
+function idempotencyKey(kind: string, parts: string[]): string {
+  const hash = createHash("sha1").update(parts.join("\0")).digest("hex");
+  return `pi-superpowers-plus:${kind}:${hash}`;
+}
+
 export default function (pi: ExtensionAPI) {
   let tasks: Task[] = [];
+  let kata: KataTrackerState = {};
+
+  const runKata = async (ctx: ExtensionContext, args: string[], signal?: AbortSignal, workspace = kata.workspace) => {
+    const targetWorkspace = workspace || workspaceFrom(ctx);
+    return pi.exec("kata", ["--workspace", targetWorkspace, "--json", ...args], {
+      cwd: targetWorkspace,
+      signal,
+      timeout: 30_000,
+    });
+  };
+
+  const ensureKataSuccess = async (ctx: ExtensionContext, args: string[], signal?: AbortSignal) => {
+    const workspace = kata.workspace || workspaceFrom(ctx);
+    const result = await runKata(ctx, args, signal, workspace);
+    const payload = parseKataJson(result.stdout, result.stderr);
+    if (result.code !== 0 || payload.error) {
+      throw new Error(kataErrorMessage(payload, `kata exited with code ${result.code}`, workspace));
+    }
+    return payload;
+  };
+
+  const failDetails = (action: PlanTrackerDetails["action"], error: string): PlanTrackerDetails => ({
+    action,
+    tasks: [...tasks],
+    kata: { ...kata },
+    error,
+  });
+
+  const createIssue = async (ctx: ExtensionContext, args: string[], signal?: AbortSignal) => {
+    const payload = await ensureKataSuccess(ctx, args, signal);
+    const number = payload.issue?.number;
+    if (typeof number !== "number") {
+      throw new Error("kata response did not include issue.number");
+    }
+    return number;
+  };
+
+  const refreshTaskStatuses = async (ctx: ExtensionContext, signal?: AbortSignal) => {
+    const refreshed: Task[] = [];
+    for (const task of tasks) {
+      if (!task.issueNumber) {
+        throw new Error(`missing kata issue mapping for task "${task.name}"; re-run plan_tracker init`);
+      }
+      const result = await runKata(ctx, ["show", String(task.issueNumber)], signal);
+      const payload = parseKataJson(result.stdout, result.stderr);
+      if (result.code !== 0 || payload.error) {
+        throw new Error(
+          kataErrorMessage(payload, `kata exited with code ${result.code}`, kata.workspace || workspaceFrom(ctx)),
+        );
+      }
+      refreshed.push({
+        ...task,
+        name: payload.issue?.title ?? task.name,
+        status: statusFromKata(payload),
+      });
+    }
+    tasks = refreshed;
+  };
 
   const reconstructState = (ctx: ExtensionContext) => {
     tasks = [];
+    kata = {};
     for (const entry of ctx.sessionManager.getBranch()) {
       if (entry.type !== "message") continue;
       const msg = entry.message;
@@ -103,6 +227,7 @@ export default function (pi: ExtensionAPI) {
       const details = msg.details as PlanTrackerDetails | undefined;
       if (details && !details.error) {
         tasks = details.tasks;
+        kata = details.kata ?? {};
       }
     }
   };
@@ -132,7 +257,6 @@ export default function (pi: ExtensionAPI) {
     updateWidget(ctx);
   };
 
-  // Reconstruct state + widget on session events
   for (const event of ["session_start", "session_switch", "session_fork", "session_tree"] as const) {
     (pi as { on(event: string, handler: (event: unknown, ctx: ExtensionContext) => void | Promise<void>): void }).on(
       event,
@@ -146,114 +270,200 @@ export default function (pi: ExtensionAPI) {
     name: "plan_tracker",
     label: "Plan Tracker",
     description:
-      "Track implementation plan progress. Actions: init (set task list), update (change task status), status (show current state), clear (remove plan).",
+      "Track implementation plan progress through kata. Actions: init (create kata plan/tasks), update (change task status), status (refresh current state), clear (remove widget/session mapping only).",
+    promptGuidelines: [
+      "Use plan_tracker for task tracking; it creates and updates kata issues in the current workspace.",
+      "plan_tracker clear only clears the local widget/session mapping; it never deletes or purges kata issues.",
+    ],
     parameters: PlanTrackerParams,
 
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(toolCallId, params, signal, _onUpdate, ctx) {
       switch (params.action) {
         case "init": {
           if (!params.tasks || params.tasks.length === 0) {
             return {
               content: [{ type: "text", text: "Error: tasks array required for init" }],
-              details: {
-                action: "init",
-                tasks: [...tasks],
-                error: "tasks required",
-              } as PlanTrackerDetails,
+              details: failDetails("init", "tasks required"),
             };
           }
-          tasks = params.tasks.map((name) => ({ name, status: "pending" as TaskStatus }));
-          updateWidget(ctx);
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Plan initialized with ${tasks.length} tasks.\n${formatStatus(tasks)}`,
-              },
-            ],
-            details: { action: "init", tasks: [...tasks] } as PlanTrackerDetails,
-          };
-        }
 
-        case "update": {
-          if (params.index === undefined || !params.status) {
-            return {
-              content: [{ type: "text", text: "Error: index and status required for update" }],
-              details: {
-                action: "update",
-                tasks: [...tasks],
-                error: "index and status required",
-              } as PlanTrackerDetails,
-            };
-          }
-          if (tasks.length === 0) {
-            return {
-              content: [{ type: "text", text: "Error: no plan active. Use init first." }],
-              details: {
-                action: "update",
-                tasks: [],
-                error: "no plan active",
-              } as PlanTrackerDetails,
-            };
-          }
-          if (params.index < 0 || params.index >= tasks.length) {
+          const previousTasks = tasks;
+          const previousKata = kata;
+          tasks = [];
+          kata = { workspace: workspaceFrom(ctx) };
+
+          try {
+            const planTitle = titleForPlan(params.tasks);
+            const parentIssueNumber = await createIssue(
+              ctx,
+              [
+                "create",
+                planTitle,
+                "--body",
+                "Task plan managed by pi-superpowers-plus.",
+                "--label",
+                "pi-plan",
+                "--idempotency-key",
+                idempotencyKey("plan", [toolCallId, planTitle, ...params.tasks]),
+              ],
+              signal,
+            );
+            kata.parentIssueNumber = parentIssueNumber;
+
+            const nextTasks: Task[] = [];
+            for (let index = 0; index < params.tasks.length; index++) {
+              const name = params.tasks[index];
+              const issueNumber = await createIssue(
+                ctx,
+                [
+                  "create",
+                  name,
+                  "--body",
+                  `Tracked by pi-superpowers-plus plan #${parentIssueNumber}.`,
+                  "--label",
+                  "pi-task",
+                  "--parent",
+                  String(parentIssueNumber),
+                  "--idempotency-key",
+                  idempotencyKey("task", [toolCallId, String(parentIssueNumber), String(index), name]),
+                ],
+                signal,
+              );
+              nextTasks.push({ name, status: "pending", issueNumber });
+            }
+            tasks = nextTasks;
+            updateWidget(ctx);
             return {
               content: [
                 {
                   type: "text",
-                  text: `Error: index ${params.index} out of range (0-${tasks.length - 1})`,
+                  text: `Plan initialized with ${tasks.length} tasks in kata (#${parentIssueNumber}).\n${formatStatus(tasks)}`,
                 },
               ],
-              details: {
-                action: "update",
-                tasks: [...tasks],
-                error: `index ${params.index} out of range`,
-              } as PlanTrackerDetails,
+              details: { action: "init", tasks: [...tasks], kata: { ...kata } } as PlanTrackerDetails,
+            };
+          } catch (error) {
+            tasks = previousTasks;
+            kata = previousKata;
+            const message = error instanceof Error ? error.message : String(error);
+            updateWidget(ctx);
+            return {
+              content: [{ type: "text", text: `Error: ${message}` }],
+              details: failDetails("init", message),
             };
           }
-          tasks[params.index].status = params.status;
-          updateWidget(ctx);
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Task ${params.index} "${tasks[params.index].name}" → ${params.status}\n${formatStatus(tasks)}`,
-              },
-            ],
-            details: { action: "update", tasks: [...tasks] } as PlanTrackerDetails,
-          };
+        }
+
+        case "update": {
+          if (!params.status) {
+            return {
+              content: [{ type: "text", text: "Error: status required for update" }],
+              details: failDetails("update", "status required"),
+            };
+          }
+
+          if (params.index === undefined) {
+            return {
+              content: [{ type: "text", text: `Workflow phase update noted: ${params.status}` }],
+              details: { action: "update", tasks: [...tasks], kata: { ...kata } } as PlanTrackerDetails,
+            };
+          }
+
+          if (tasks.length === 0) {
+            return {
+              content: [{ type: "text", text: "Error: no kata-backed plan active. Use init first." }],
+              details: failDetails("update", "no plan active"),
+            };
+          }
+          if (params.index < 0 || params.index >= tasks.length) {
+            const message = `index ${params.index} out of range`;
+            return {
+              content: [{ type: "text", text: `Error: index ${params.index} out of range (0-${tasks.length - 1})` }],
+              details: failDetails("update", message),
+            };
+          }
+
+          const task = tasks[params.index];
+          if (!task.issueNumber) {
+            const message = `missing kata issue mapping for task "${task.name}"; re-run plan_tracker init`;
+            return {
+              content: [{ type: "text", text: `Error: ${message}` }],
+              details: failDetails("update", message),
+            };
+          }
+
+          try {
+            if (params.status === "complete") {
+              await ensureKataSuccess(ctx, ["close", String(task.issueNumber), "--reason", "done"], signal);
+              await ensureKataSuccess(ctx, ["label", "rm", String(task.issueNumber), "pi:in-progress"], signal);
+            } else {
+              await ensureKataSuccess(ctx, ["reopen", String(task.issueNumber)], signal);
+              if (params.status === "in_progress") {
+                await ensureKataSuccess(ctx, ["label", "add", String(task.issueNumber), "pi:in-progress"], signal);
+              } else {
+                await ensureKataSuccess(ctx, ["label", "rm", String(task.issueNumber), "pi:in-progress"], signal);
+              }
+            }
+            tasks[params.index] = { ...task, status: params.status };
+            updateWidget(ctx);
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Task ${params.index} "${formatTaskLabel(tasks[params.index])}" → ${params.status}\n${formatStatus(tasks)}`,
+                },
+              ],
+              details: { action: "update", tasks: [...tasks], kata: { ...kata } } as PlanTrackerDetails,
+            };
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return {
+              content: [{ type: "text", text: `Error: ${message}` }],
+              details: failDetails("update", message),
+            };
+          }
         }
 
         case "status": {
-          return {
-            content: [{ type: "text", text: formatStatus(tasks) }],
-            details: { action: "status", tasks: [...tasks] } as PlanTrackerDetails,
-          };
+          try {
+            await refreshTaskStatuses(ctx, signal);
+            updateWidget(ctx);
+            return {
+              content: [{ type: "text", text: formatStatus(tasks) }],
+              details: { action: "status", tasks: [...tasks], kata: { ...kata } } as PlanTrackerDetails,
+            };
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return {
+              content: [{ type: "text", text: `Error: ${message}` }],
+              details: failDetails("status", message),
+            };
+          }
         }
 
         case "clear": {
           const count = tasks.length;
           tasks = [];
+          kata = {};
           updateWidget(ctx);
           return {
             content: [
               {
                 type: "text",
-                text: count > 0 ? `Plan cleared (${count} tasks removed).` : "No plan was active.",
+                text:
+                  count > 0
+                    ? `Plan widget cleared (${count} task mappings removed). Kata issues were left intact.`
+                    : "No plan was active.",
               },
             ],
-            details: { action: "clear", tasks: [] } as PlanTrackerDetails,
+            details: { action: "clear", tasks: [], kata: {} } as PlanTrackerDetails,
           };
         }
 
         default:
           return {
             content: [{ type: "text", text: `Unknown action: ${params.action}` }],
-            details: {
-              action: "status",
-              tasks: [...tasks],
-              error: `unknown action`,
-            } as PlanTrackerDetails,
+            details: failDetails("status", "unknown action"),
           };
       }
     },
@@ -266,7 +476,7 @@ export default function (pi: ExtensionAPI) {
         if (args.status) text += ` → ${theme.fg("dim", args.status)}`;
       }
       if (args.action === "init" && args.tasks) {
-        text += ` ${theme.fg("dim", `(${args.tasks.length} tasks)`)}`;
+        text += ` ${theme.fg("dim", `(${args.tasks.length} kata tasks)`)}`;
       }
       return new Text(text, 0, 0);
     },
@@ -286,7 +496,11 @@ export default function (pi: ExtensionAPI) {
       switch (details.action) {
         case "init":
           return new Text(
-            theme.fg("success", "✓ ") + theme.fg("muted", `Plan initialized with ${taskList.length} tasks`),
+            theme.fg("success", "✓ ") +
+              theme.fg(
+                "muted",
+                `Kata plan #${details.kata?.parentIssueNumber ?? "?"} initialized with ${taskList.length} tasks`,
+              ),
             0,
             0,
           );
@@ -300,7 +514,7 @@ export default function (pi: ExtensionAPI) {
         }
         case "status": {
           if (taskList.length === 0) {
-            return new Text(theme.fg("dim", "No plan active"), 0, 0);
+            return new Text(theme.fg("dim", "No kata-backed plan active"), 0, 0);
           }
           const complete = taskList.filter((t) => t.status === "complete").length;
           let text = theme.fg("muted", `${complete}/${taskList.length} complete`);
@@ -311,12 +525,12 @@ export default function (pi: ExtensionAPI) {
                 : t.status === "in_progress"
                   ? theme.fg("warning", "→")
                   : theme.fg("dim", "○");
-            text += `\n${icon} ${theme.fg("muted", t.name)}`;
+            text += `\n${icon} ${theme.fg("muted", formatTaskLabel(t))}`;
           }
           return new Text(text, 0, 0);
         }
         case "clear":
-          return new Text(theme.fg("success", "✓ ") + theme.fg("muted", "Plan cleared"), 0, 0);
+          return new Text(theme.fg("success", "✓ ") + theme.fg("muted", "Plan widget cleared; kata issues kept"), 0, 0);
         default:
           return new Text(theme.fg("dim", "Done"), 0, 0);
       }
