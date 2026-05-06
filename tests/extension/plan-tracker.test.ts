@@ -267,6 +267,42 @@ describe("kata-backed plan_tracker", () => {
     expect(result.details.tasks.map((task: any) => task.issueNumber)).toEqual([131]);
   });
 
+  test("init retry resumes parent-only partial kata plan", async () => {
+    const fake = createFakePi([
+      { stdout: kataIssue(140, "Plan") },
+      { stdout: '{"error":{"message":"first child failed"}}', code: 1 },
+      { stdout: kataIssue(141, "Task 1: Setup") },
+    ]);
+    planTrackerExtension(fake.api as any);
+    const tool = getPlanTracker(fake);
+
+    const failed = await tool.execute("call-1", { action: "init", tasks: ["Task 1: Setup"] }, undefined, undefined, {
+      cwd: "/repo",
+      hasUI: false,
+    });
+    const retried = await tool.execute("call-2", { action: "init", tasks: ["Task 1: Setup"] }, undefined, undefined, {
+      cwd: "/repo",
+      hasUI: false,
+    });
+
+    expect(failed.details.kata.parentIssueNumber).toBe(140);
+    expectKataCall(fake.execCalls[2]!, [
+      "--workspace",
+      "/repo",
+      "--json",
+      "create",
+      "Task 1: Setup",
+      "--body",
+      "Tracked by pi-superpowers-plus plan #140.",
+      "--label",
+      "pi-task",
+      "--parent",
+      "140",
+    ]);
+    expect(retried.details.kata.parentIssueNumber).toBe(140);
+    expect(retried.details.tasks.map((task: any) => task.issueNumber)).toEqual([141]);
+  });
+
   test("init retry resumes partial kata plan after child creation failure", async () => {
     const fake = createFakePi([
       { stdout: kataIssue(110, "Plan") },
