@@ -480,6 +480,46 @@ describe("kata-backed plan_tracker", () => {
     expect(result.details.tasks[0]).toMatchObject({ status: "complete", issueNumber: 83 });
   });
 
+  test("reconstructs refreshed task state from recoverable error results", async () => {
+    const fake = createFakePi([{ stdout: kataIssue(101, "Task 1: Setup", "closed") }]);
+    planTrackerExtension(fake.api as any);
+    const onSessionStart = fake.handlers.get("session_start")![0]!;
+    await onSessionStart(
+      { type: "session_start", reason: "startup" },
+      {
+        hasUI: false,
+        sessionManager: {
+          getBranch: () => [
+            {
+              type: "message",
+              message: {
+                role: "toolResult",
+                toolName: "plan_tracker",
+                details: {
+                  action: "update",
+                  error: "label removal failed",
+                  tasks: [{ name: "Task 1: Setup", status: "complete", issueNumber: 101 }],
+                  kata: { workspace: "/repo" },
+                },
+              },
+            },
+          ],
+        },
+      },
+    );
+
+    const result = await getPlanTracker(fake).execute("call-2", { action: "status" }, undefined, undefined, {
+      cwd: "/other",
+      hasUI: false,
+    });
+
+    expect(fake.execCalls[0]).toMatchObject({
+      command: "kata",
+      args: ["--workspace", "/repo", "--json", "show", "101"],
+    });
+    expect(result.details.tasks[0]).toMatchObject({ status: "complete", issueNumber: 101 });
+  });
+
   test("status reports missing kata issue mappings", async () => {
     const fake = createFakePi();
     planTrackerExtension(fake.api as any);

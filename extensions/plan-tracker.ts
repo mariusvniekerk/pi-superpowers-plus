@@ -266,7 +266,7 @@ export default function (pi: ExtensionAPI) {
       const msg = entry.message;
       if (msg.role !== "toolResult" || msg.toolName !== "plan_tracker") continue;
       const details = msg.details as PlanTrackerDetails | undefined;
-      if (details && !details.error) {
+      if (details) {
         tasks = details.tasks;
         kata = details.kata ?? {};
       }
