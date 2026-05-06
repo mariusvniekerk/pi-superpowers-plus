@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import planTrackerExtension from "../../extensions/plan-tracker";
 
 type ToolDefinition = {
@@ -158,7 +158,11 @@ describe("kata-backed plan_tracker", () => {
   });
 
   test("no-index update records the current workflow phase in kata", async () => {
-    const fake = createFakePi([{ stdout: kataIssue(90, "Workflow phase: brainstorm") }, { stdout: kataIssue(90) }]);
+    const fake = createFakePi([
+      { stdout: kataIssue(90, "Workflow phase: brainstorm") },
+      { stdout: kataIssue(90) },
+      { stdout: kataIssue(90) },
+    ]);
     planTrackerExtension(fake.api as any);
 
     const result = await getPlanTracker(fake).execute(
@@ -197,8 +201,48 @@ describe("kata-backed plan_tracker", () => {
       command: "kata",
       args: ["--workspace", "/repo", "--json", "close", "90", "--reason", "done"],
     });
+    expect(fake.execCalls[2]).toMatchObject({
+      command: "kata",
+      args: ["--workspace", "/repo", "--json", "label", "rm", "90", "pi:in-progress"],
+    });
     expect(result.details.kata.phaseIssueNumbers.brainstorm).toBe(90);
     expect(result.content[0].text).toContain("Workflow phase brainstorm → complete in kata (#90)");
+  });
+
+  test("phase issue updates keep using the workspace captured on first phase update", async () => {
+    const fake = createFakePi([
+      { stdout: kataIssue(91, "Workflow phase: brainstorm") },
+      { stdout: kataIssue(91) },
+      { stdout: kataIssue(91) },
+      { stdout: kataIssue(91) },
+      { stdout: kataIssue(91) },
+    ]);
+    planTrackerExtension(fake.api as any);
+    const tool = getPlanTracker(fake);
+    const sessionManager = {
+      getBranch: () => [
+        {
+          type: "custom",
+          customType: "superpowers_state",
+          data: { workflow: { currentPhase: "brainstorm" } },
+        },
+      ],
+    };
+
+    await tool.execute("phase-call-1", { action: "update", status: "in_progress" }, undefined, undefined, {
+      cwd: "/repo-a",
+      hasUI: false,
+      sessionManager,
+    });
+    await tool.execute("phase-call-2", { action: "update", status: "complete" }, undefined, undefined, {
+      cwd: "/repo-b",
+      hasUI: false,
+      sessionManager,
+    });
+
+    expect(
+      fake.execCalls.some((call) => call.args.join(" ") === "--workspace /repo-a --json close 91 --reason done"),
+    ).toBe(true);
   });
 
   test("complete update closes the mapped kata task issue", async () => {
@@ -387,6 +431,26 @@ describe("kata-backed plan_tracker", () => {
 
     expect(result.details.error).toContain("label removal failed");
     expect(result.details.tasks[0]).toMatchObject({ status: "in_progress", issueNumber: 81 });
+  });
+
+  test("partial update refreshes the widget after durable kata state changes", async () => {
+    const fake = createFakePi([
+      { stdout: kataIssue(84, "Plan") },
+      { stdout: kataIssue(85) },
+      { stdout: kataIssue(85, "Task 1: Setup", "closed") },
+      { stdout: '{"error":{"message":"label removal failed"}}', code: 1 },
+      { stdout: kataIssue(85, "Task 1: Setup", "closed", ["pi:in-progress"]) },
+    ]);
+    planTrackerExtension(fake.api as any);
+    const tool = getPlanTracker(fake);
+    const setWidget = vi.fn();
+    const ctx = { cwd: "/repo", hasUI: true, ui: { setWidget } };
+
+    await tool.execute("call-1", { action: "init", tasks: ["Task 1: Setup"] }, undefined, undefined, ctx);
+    setWidget.mockClear();
+    await tool.execute("call-2", { action: "update", index: 0, status: "complete" }, undefined, undefined, ctx);
+
+    expect(setWidget).toHaveBeenCalledWith("plan_tracker", expect.any(Function));
   });
 
   test("complete update refreshes durable kata state after label removal failures", async () => {

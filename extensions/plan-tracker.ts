@@ -208,6 +208,7 @@ export default function (pi: ExtensionAPI) {
   };
 
   const ensurePhaseIssue = async (ctx: ExtensionContext, phase: string, signal?: AbortSignal) => {
+    kata.workspace ??= workspaceFrom(ctx);
     kata.phaseIssueNumbers ??= {};
     const existing = kata.phaseIssueNumbers[phase];
     if (existing) return existing;
@@ -416,6 +417,7 @@ export default function (pi: ExtensionAPI) {
               const issueNumber = await ensurePhaseIssue(ctx, phase, signal);
               if (params.status === "complete") {
                 await ensureKataSuccess(ctx, ["close", String(issueNumber), "--reason", "done"], signal);
+                await runKata(ctx, ["label", "rm", String(issueNumber), "pi:in-progress"], signal);
               } else {
                 await ensureKataSuccess(ctx, ["reopen", String(issueNumber)], signal);
                 if (params.status === "in_progress") {
@@ -489,6 +491,7 @@ export default function (pi: ExtensionAPI) {
             const message = error instanceof Error ? error.message : String(error);
             try {
               tasks[params.index] = await refreshTaskFromKata(ctx, task, signal);
+              updateWidget(ctx);
             } catch {}
             return {
               content: [{ type: "text", text: `Error: ${message}` }],
