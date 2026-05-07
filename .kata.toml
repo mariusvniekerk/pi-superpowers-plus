@@ -1,0 +1,5 @@
+version = 1
+
+[project]
+identity = "github.com/mariusvniekerk/pi-superpowers-plus"
+name     = "pi-superpowers-plus"
