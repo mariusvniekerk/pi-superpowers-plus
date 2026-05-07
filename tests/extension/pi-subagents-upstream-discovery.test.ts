@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { __internal as syncInternal } from "../../extensions/pi-subagents-agent-sync";
-import { discoverAgents } from "pi-subagents/agents.ts";
+import { discoverAgents } from "pi-subagents/src/agents/agents.ts";
 
 let tempHome: string;
 let workspaceCwd: string;

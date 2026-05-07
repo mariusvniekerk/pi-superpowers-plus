@@ -1,4 +1,4 @@
-declare module "pi-subagents/agents.ts" {
+declare module "pi-subagents/src/agents/agents.ts" {
   export type AgentSource = "builtin" | "user" | "project";
   export type AgentScope = "user" | "project" | "both";
 

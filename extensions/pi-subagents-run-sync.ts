@@ -4,11 +4,17 @@
 
 import { spawn } from "node:child_process";
 import type { Message } from "@mariozechner/pi-ai";
-import { ensureArtifactsDir, getArtifactPaths, writeArtifact, writeMetadata } from "pi-subagents/artifacts.ts";
-import { createJsonlWriter } from "pi-subagents/jsonl-writer.ts";
-import { getPiSpawnCommand } from "pi-subagents/pi-spawn.ts";
-import { captureSingleOutputSnapshot, resolveSingleOutput } from "pi-subagents/single-output.ts";
-import { buildSkillInjection, resolveSkills } from "pi-subagents/skills.ts";
+import { buildSkillInjection, resolveSkills } from "pi-subagents/src/agents/skills.ts";
+import { applyThinkingSuffix, buildPiArgs, cleanupTempDir } from "pi-subagents/src/runs/shared/pi-args.ts";
+import { getPiSpawnCommand } from "pi-subagents/src/runs/shared/pi-spawn.ts";
+import { captureSingleOutputSnapshot, resolveSingleOutput } from "pi-subagents/src/runs/shared/single-output.ts";
+import {
+  ensureArtifactsDir,
+  getArtifactPaths,
+  writeArtifact,
+  writeMetadata,
+} from "pi-subagents/src/shared/artifacts.ts";
+import { createJsonlWriter } from "pi-subagents/src/shared/jsonl-writer.ts";
 import {
   type AgentProgress,
   type ArtifactPaths,
@@ -17,15 +23,14 @@ import {
   type RunSyncOptions,
   type SingleResult,
   truncateOutput,
-} from "pi-subagents/types.ts";
+} from "pi-subagents/src/shared/types.ts";
 import {
   detectSubagentError,
   extractTextFromContent,
   extractToolArgsPreview,
   findLatestSessionFile,
   getFinalOutput,
-} from "pi-subagents/utils.ts";
-import { applyThinkingSuffix, buildPiArgs, cleanupTempDir } from "./pi-subagents-pi-args.ts";
+} from "pi-subagents/src/shared/utils.ts";
 
 const TURN_END_QUIESCENCE_MS = 700;
 
@@ -90,9 +95,11 @@ export async function runSync(
     sessionFile: options.sessionFile,
     model: effectiveModel,
     thinking: agent.thinking,
+    systemPromptMode: "append",
+    inheritProjectContext: true,
+    inheritSkills: skillNames.length === 0,
     tools: agent.tools,
     extensions: agent.extensions,
-    skills: skillNames,
     systemPrompt,
     mcpDirectTools: agent.mcpDirectTools,
     promptFileStem: agent.name,

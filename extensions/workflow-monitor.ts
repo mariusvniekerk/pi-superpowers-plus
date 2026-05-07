@@ -19,7 +19,7 @@ import type {
   ToolCallEventResult,
 } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 import { log } from "./logging.js";
 import { normalizeSessionTransition } from "./shared/session-transition";
 import { getCurrentGitRef } from "./workflow-monitor/git";

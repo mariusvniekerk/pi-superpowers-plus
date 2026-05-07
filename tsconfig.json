@@ -4,13 +4,18 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "moduleDetection": "force",
+    "ignoreDeprecations": "6.0",
     "noEmit": true,
     "strict": false,
     "allowJs": false,
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "types": ["node", "vitest/globals"],
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "pi-subagents/src/*": ["tests/helpers/pi-subagents-src/*"]
+    }
   },
   "include": [
     "extensions/**/*.ts",
