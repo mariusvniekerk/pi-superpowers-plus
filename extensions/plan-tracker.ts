@@ -18,13 +18,13 @@ type TaskStatus = "pending" | "in_progress" | "complete";
 interface Task {
   name: string;
   status: TaskStatus;
-  issueNumber?: number;
+  issueRef?: string;
 }
 
 interface KataTrackerState {
   workspace?: string;
-  parentIssueNumber?: number;
-  phaseIssueNumbers?: Record<string, number>;
+  parentIssueRef?: string;
+  phaseIssueRefs?: Record<string, string>;
 }
 
 interface PlanTrackerDetails {
@@ -36,7 +36,9 @@ interface PlanTrackerDetails {
 
 interface KataIssuePayload {
   issue?: {
-    number?: number;
+    id?: number;
+    short_id?: string;
+    qualified_id?: string;
     title?: string;
     status?: string;
   };
@@ -97,7 +99,8 @@ function formatWidget(tasks: Task[], theme: Theme): string {
 }
 
 function formatTaskLabel(task: Task): string {
-  return task.issueNumber ? `#${task.issueNumber} ${task.name}` : task.name;
+  if (task.issueRef) return `kata#${task.issueRef} ${task.name}`;
+  return task.name;
 }
 
 function formatStatus(tasks: Task[]): string {
@@ -157,6 +160,28 @@ function idempotencyKey(kind: string, parts: string[]): string {
   return `pi-superpowers-plus:${kind}:${hash}`;
 }
 
+function issueRefFromPayload(payload: KataIssuePayload): string | undefined {
+  return payload.issue?.short_id ?? payload.issue?.qualified_id;
+}
+
+function requireTaskIssueRef(task: Task): string {
+  if (task.issueRef) return task.issueRef;
+  throw new Error(`missing kata issue mapping for task "${task.name}"; re-run plan_tracker init`);
+}
+
+function closeDoneArgs(issueRef: string, subject: string): string[] {
+  return [
+    "close",
+    issueRef,
+    "--reason",
+    "done",
+    "--message",
+    `Marked complete by pi-superpowers-plus after verified progress was recorded for ${subject}.`,
+    "--evidence",
+    "test:plan-tracker-status-complete",
+  ];
+}
+
 function currentWorkflowPhase(ctx: ExtensionContext): string | undefined {
   const branch = ctx.sessionManager?.getBranch?.() ?? [];
   for (let i = branch.length - 1; i >= 0; i--) {
@@ -175,7 +200,7 @@ export default function (pi: ExtensionAPI) {
   const cloneTasks = () => tasks.map((task) => ({ ...task }));
   const cloneKata = (): KataTrackerState => ({
     ...kata,
-    phaseIssueNumbers: kata.phaseIssueNumbers ? { ...kata.phaseIssueNumbers } : undefined,
+    phaseIssueRefs: kata.phaseIssueRefs ? { ...kata.phaseIssueRefs } : undefined,
   });
 
   const details = (action: PlanTrackerDetails["action"], error?: string): PlanTrackerDetails => ({
@@ -209,24 +234,24 @@ export default function (pi: ExtensionAPI) {
 
   const createIssue = async (ctx: ExtensionContext, args: string[], signal?: AbortSignal) => {
     const payload = await ensureKataSuccess(ctx, args, signal);
-    const number = payload.issue?.number;
-    if (typeof number !== "number") {
-      throw new Error("kata response did not include issue.number");
+    const issueRef = issueRefFromPayload(payload);
+    if (!issueRef) {
+      throw new Error("kata response did not include issue.short_id");
     }
-    return number;
+    return issueRef;
   };
 
   const ensurePhaseIssue = async (ctx: ExtensionContext, phase: string, signal?: AbortSignal) => {
     const previousWorkspace = kata.workspace;
-    const previousPhaseIssueNumbers = kata.phaseIssueNumbers ? { ...kata.phaseIssueNumbers } : undefined;
+    const previousPhaseIssueRefs = kata.phaseIssueRefs ? { ...kata.phaseIssueRefs } : undefined;
     kata.workspace ??= workspaceFrom(ctx);
-    kata.phaseIssueNumbers ??= {};
-    const existing = kata.phaseIssueNumbers[phase];
+    kata.phaseIssueRefs ??= {};
+    const existing = kata.phaseIssueRefs[phase];
     if (existing) return existing;
 
     const title = `Workflow phase: ${phase}`;
     try {
-      const issueNumber = await createIssue(
+      const issueRef = await createIssue(
         ctx,
         [
           "create",
@@ -240,20 +265,18 @@ export default function (pi: ExtensionAPI) {
         ],
         signal,
       );
-      kata.phaseIssueNumbers[phase] = issueNumber;
-      return issueNumber;
+      kata.phaseIssueRefs[phase] = issueRef;
+      return issueRef;
     } catch (error) {
       kata.workspace = previousWorkspace;
-      kata.phaseIssueNumbers = previousPhaseIssueNumbers;
+      kata.phaseIssueRefs = previousPhaseIssueRefs;
       throw error;
     }
   };
 
   const refreshTaskFromKata = async (ctx: ExtensionContext, task: Task, signal?: AbortSignal): Promise<Task> => {
-    if (!task.issueNumber) {
-      throw new Error(`missing kata issue mapping for task "${task.name}"; re-run plan_tracker init`);
-    }
-    const result = await runKata(ctx, ["show", String(task.issueNumber)], signal);
+    const issueRef = requireTaskIssueRef(task);
+    const result = await runKata(ctx, ["show", issueRef], signal);
     const payload = parseKataJson(result.stdout, result.stderr);
     if (result.code !== 0 || payload.error) {
       throw new Error(
@@ -348,7 +371,7 @@ export default function (pi: ExtensionAPI) {
           const previousTasks = tasks;
           const previousKata = kata;
           const canResumePartialPlan =
-            kata.parentIssueNumber !== undefined &&
+            kata.parentIssueRef !== undefined &&
             kata.workspace === workspaceFrom(ctx) &&
             tasks.length <= params.tasks.length &&
             params.tasks.every((name, index) => tasks[index] === undefined || tasks[index].name === name);
@@ -358,8 +381,8 @@ export default function (pi: ExtensionAPI) {
 
           try {
             const planTitle = titleForPlan(params.tasks);
-            const parentIssueNumber =
-              kata.parentIssueNumber ??
+            const parentIssueRef =
+              kata.parentIssueRef ??
               (await createIssue(
                 ctx,
                 [
@@ -374,30 +397,30 @@ export default function (pi: ExtensionAPI) {
                 ],
                 signal,
               ));
-            kata.parentIssueNumber = parentIssueNumber;
+            kata.parentIssueRef = parentIssueRef;
 
             for (let index = 0; index < params.tasks.length; index++) {
               const name = params.tasks[index];
               const existingTask = nextTasks[index];
-              if (existingTask?.name === name && existingTask.issueNumber) continue;
+              if (existingTask?.name === name && existingTask.issueRef) continue;
 
-              const issueNumber = await createIssue(
+              const issueRef = await createIssue(
                 ctx,
                 [
                   "create",
                   name,
                   "--body",
-                  `Tracked by pi-superpowers-plus plan #${parentIssueNumber}.`,
+                  `Tracked by pi-superpowers-plus plan kata#${parentIssueRef}.`,
                   "--label",
                   "pi-task",
                   "--parent",
-                  String(parentIssueNumber),
+                  parentIssueRef,
                   "--idempotency-key",
-                  idempotencyKey("task", [toolCallId, String(parentIssueNumber), String(index), name]),
+                  idempotencyKey("task", [toolCallId, parentIssueRef, String(index), name]),
                 ],
                 signal,
               );
-              nextTasks[index] = { name, status: "pending", issueNumber };
+              nextTasks[index] = { name, status: "pending", issueRef };
             }
             tasks = nextTasks;
             updateWidget(ctx);
@@ -405,14 +428,14 @@ export default function (pi: ExtensionAPI) {
               content: [
                 {
                   type: "text",
-                  text: `Plan initialized with ${tasks.length} tasks in kata (#${parentIssueNumber}).\n${formatStatus(tasks)}`,
+                  text: `Plan initialized with ${tasks.length} tasks in kata (kata#${parentIssueRef}).\n${formatStatus(tasks)}`,
                 },
               ],
               details: details("init"),
             };
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            if (kata.parentIssueNumber || nextTasks.length > 0) {
+            if (kata.parentIssueRef || nextTasks.length > 0) {
               tasks = nextTasks;
             } else {
               tasks = previousTasks;
@@ -445,21 +468,21 @@ export default function (pi: ExtensionAPI) {
             }
 
             try {
-              const issueNumber = await ensurePhaseIssue(ctx, phase, signal);
+              const issueRef = await ensurePhaseIssue(ctx, phase, signal);
               if (params.status === "complete") {
-                await ensureKataSuccess(ctx, ["close", String(issueNumber), "--reason", "done"], signal);
-                await runKata(ctx, ["label", "rm", String(issueNumber), "pi:in-progress"], signal);
+                await ensureKataSuccess(ctx, closeDoneArgs(issueRef, `workflow phase ${phase}`), signal);
+                await runKata(ctx, ["label", "rm", issueRef, "pi:in-progress"], signal);
               } else {
-                await ensureKataSuccess(ctx, ["reopen", String(issueNumber)], signal);
+                await ensureKataSuccess(ctx, ["reopen", issueRef], signal);
                 if (params.status === "in_progress") {
-                  await ensureKataSuccess(ctx, ["label", "add", String(issueNumber), "pi:in-progress"], signal);
+                  await ensureKataSuccess(ctx, ["label", "add", issueRef, "pi:in-progress"], signal);
                 } else {
-                  await ensureKataSuccess(ctx, ["label", "rm", String(issueNumber), "pi:in-progress"], signal);
+                  await ensureKataSuccess(ctx, ["label", "rm", issueRef, "pi:in-progress"], signal);
                 }
               }
               return {
                 content: [
-                  { type: "text", text: `Workflow phase ${phase} → ${params.status} in kata (#${issueNumber})` },
+                  { type: "text", text: `Workflow phase ${phase} → ${params.status} in kata (kata#${issueRef})` },
                 ],
                 details: details("update"),
               };
@@ -487,8 +510,11 @@ export default function (pi: ExtensionAPI) {
           }
 
           const task = tasks[params.index];
-          if (!task.issueNumber) {
-            const message = `missing kata issue mapping for task "${task.name}"; re-run plan_tracker init`;
+          let issueRef: string;
+          try {
+            issueRef = requireTaskIssueRef(task);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
             return {
               content: [{ type: "text", text: `Error: ${message}` }],
               details: failDetails("update", message),
@@ -497,14 +523,14 @@ export default function (pi: ExtensionAPI) {
 
           try {
             if (params.status === "complete") {
-              await ensureKataSuccess(ctx, ["close", String(task.issueNumber), "--reason", "done"], signal);
-              await ensureKataSuccess(ctx, ["label", "rm", String(task.issueNumber), "pi:in-progress"], signal);
+              await ensureKataSuccess(ctx, closeDoneArgs(issueRef, `task "${task.name}"`), signal);
+              await ensureKataSuccess(ctx, ["label", "rm", issueRef, "pi:in-progress"], signal);
             } else {
-              await ensureKataSuccess(ctx, ["reopen", String(task.issueNumber)], signal);
+              await ensureKataSuccess(ctx, ["reopen", issueRef], signal);
               if (params.status === "in_progress") {
-                await ensureKataSuccess(ctx, ["label", "add", String(task.issueNumber), "pi:in-progress"], signal);
+                await ensureKataSuccess(ctx, ["label", "add", issueRef, "pi:in-progress"], signal);
               } else {
-                await ensureKataSuccess(ctx, ["label", "rm", String(task.issueNumber), "pi:in-progress"], signal);
+                await ensureKataSuccess(ctx, ["label", "rm", issueRef, "pi:in-progress"], signal);
               }
             }
             tasks[params.index] = { ...task, status: params.status };
@@ -606,7 +632,7 @@ export default function (pi: ExtensionAPI) {
             theme.fg("success", "✓ ") +
               theme.fg(
                 "muted",
-                `Kata plan #${details.kata?.parentIssueNumber ?? "?"} initialized with ${taskList.length} tasks`,
+                `Kata plan kata#${details.kata?.parentIssueRef ?? "?"} initialized with ${taskList.length} tasks`,
               ),
             0,
             0,

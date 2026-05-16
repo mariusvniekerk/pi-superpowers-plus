@@ -257,7 +257,7 @@ workflow_reference({ topic: "debug-condition-waiting" })  - Replace timeouts wit
 The `plan_tracker` tool uses kata as the durable task ledger and shows progress in the TUI. It operates in the current project workspace (`ctx.cwd`), so each project needs its own `kata init`.
 
 ```
-Kata Tasks: ✓✓→○○ (2/5)  #42 Task 3: Recovery modes
+Kata Tasks: ✓✓→○○ (2/5)  kata#abcd Task 3: Recovery modes
 ```
 
 ```

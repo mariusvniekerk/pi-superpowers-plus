@@ -12,10 +12,10 @@ type ToolDefinition = {
   ) => Promise<any>;
 };
 
-function kataIssue(number: number, title = `issue ${number}`, status = "open", labels: string[] = []) {
+function kataIssue(ref: string, title = `issue ${ref}`, status = "open", labels: string[] = []) {
   return JSON.stringify({
     kata_api_version: 1,
-    issue: { number, title, status },
+    issue: { id: Number.parseInt(ref.replace(/\D/g, ""), 10) || 1, short_id: ref, title, status },
     labels: labels.map((label) => ({ label })),
   });
 }
@@ -66,9 +66,9 @@ function expectKataCall(call: { command: string; args: string[] }, expectedArgs:
 describe("kata-backed plan_tracker", () => {
   test("init creates a parent kata issue and one child issue per task in the current workspace", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(10, "Plan") },
-      { stdout: kataIssue(11) },
-      { stdout: kataIssue(12) },
+      { stdout: kataIssue("p10", "Plan") },
+      { stdout: kataIssue("t11") },
+      { stdout: kataIssue("t12") },
     ]);
     planTrackerExtension(fake.api as any);
 
@@ -100,11 +100,11 @@ describe("kata-backed plan_tracker", () => {
       "create",
       "Task 1: Setup",
       "--body",
-      "Tracked by pi-superpowers-plus plan #10.",
+      "Tracked by pi-superpowers-plus plan kata#p10.",
       "--label",
       "pi-task",
       "--parent",
-      "10",
+      "p10",
     ]);
     expect(fake.execCalls[1]!.args).toContain("--idempotency-key");
 
@@ -115,25 +115,25 @@ describe("kata-backed plan_tracker", () => {
       "create",
       "Task 2: Core",
       "--body",
-      "Tracked by pi-superpowers-plus plan #10.",
+      "Tracked by pi-superpowers-plus plan kata#p10.",
       "--label",
       "pi-task",
       "--parent",
-      "10",
+      "p10",
     ]);
     expect(fake.execCalls[2]!.args).toContain("--idempotency-key");
 
-    expect(result.details.kata.parentIssueNumber).toBe(10);
-    expect(result.details.tasks.map((task: any) => task.issueNumber)).toEqual([11, 12]);
-    expect(result.content[0].text).toContain("Plan initialized with 2 tasks in kata (#10)");
+    expect(result.details.kata.parentIssueRef).toBe("p10");
+    expect(result.details.tasks.map((task: any) => task.issueRef)).toEqual(["t11", "t12"]);
+    expect(result.content[0].text).toContain("Plan initialized with 2 tasks in kata (kata#p10)");
   });
 
   test("re-init after clear uses a fresh idempotency scope", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(10, "Plan") },
-      { stdout: kataIssue(11) },
-      { stdout: kataIssue(20, "Plan") },
-      { stdout: kataIssue(21) },
+      { stdout: kataIssue("p10", "Plan") },
+      { stdout: kataIssue("t11") },
+      { stdout: kataIssue("p20", "Plan") },
+      { stdout: kataIssue("t21") },
     ]);
     planTrackerExtension(fake.api as any);
     const tool = getPlanTracker(fake);
@@ -159,9 +159,9 @@ describe("kata-backed plan_tracker", () => {
 
   test("no-index update records the current workflow phase in kata", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(90, "Workflow phase: brainstorm") },
-      { stdout: kataIssue(90) },
-      { stdout: kataIssue(90) },
+      { stdout: kataIssue("ph90", "Workflow phase: brainstorm") },
+      { stdout: kataIssue("ph90") },
+      { stdout: kataIssue("ph90") },
     ]);
     planTrackerExtension(fake.api as any);
 
@@ -199,22 +199,34 @@ describe("kata-backed plan_tracker", () => {
     expect(fake.execCalls[0]!.args).toContain("--idempotency-key");
     expect(fake.execCalls[1]).toMatchObject({
       command: "kata",
-      args: ["--workspace", "/repo", "--json", "close", "90", "--reason", "done"],
+      args: [
+        "--workspace",
+        "/repo",
+        "--json",
+        "close",
+        "ph90",
+        "--reason",
+        "done",
+        "--message",
+        expect.any(String),
+        "--evidence",
+        "test:plan-tracker-status-complete",
+      ],
     });
     expect(fake.execCalls[2]).toMatchObject({
       command: "kata",
-      args: ["--workspace", "/repo", "--json", "label", "rm", "90", "pi:in-progress"],
+      args: ["--workspace", "/repo", "--json", "label", "rm", "ph90", "pi:in-progress"],
     });
-    expect(result.details.kata.phaseIssueNumbers.brainstorm).toBe(90);
-    expect(result.content[0].text).toContain("Workflow phase brainstorm → complete in kata (#90)");
+    expect(result.details.kata.phaseIssueRefs.brainstorm).toBe("ph90");
+    expect(result.content[0].text).toContain("Workflow phase brainstorm → complete in kata (kata#ph90)");
   });
 
   test("failed phase issue creation does not anchor future retries to the failed workspace", async () => {
     const fake = createFakePi([
       { stdout: '{"error":{"message":"create failed"}}', code: 1 },
-      { stdout: kataIssue(92, "Workflow phase: brainstorm") },
-      { stdout: kataIssue(92) },
-      { stdout: kataIssue(92) },
+      { stdout: kataIssue("i92", "Workflow phase: brainstorm") },
+      { stdout: kataIssue("i92") },
+      { stdout: kataIssue("i92") },
     ]);
     planTrackerExtension(fake.api as any);
     const tool = getPlanTracker(fake);
@@ -239,17 +251,17 @@ describe("kata-backed plan_tracker", () => {
       sessionManager,
     });
 
-    expect(failed.details.kata.phaseIssueNumbers).toBeUndefined();
+    expect(failed.details.kata.phaseIssueRefs).toBeUndefined();
     expectKataCall(fake.execCalls[1]!, ["--workspace", "/good-repo", "--json", "create", "Workflow phase: brainstorm"]);
   });
 
   test("init with shorter task list does not resume stale trailing task mappings", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(120, "Plan") },
-      { stdout: kataIssue(121, "Task 1: Setup") },
-      { stdout: kataIssue(122, "Task 2: Core") },
-      { stdout: kataIssue(130, "Plan") },
-      { stdout: kataIssue(131, "Task 1: Setup") },
+      { stdout: kataIssue("i120", "Plan") },
+      { stdout: kataIssue("i121", "Task 1: Setup") },
+      { stdout: kataIssue("i122", "Task 2: Core") },
+      { stdout: kataIssue("i130", "Plan") },
+      { stdout: kataIssue("i131", "Task 1: Setup") },
     ]);
     planTrackerExtension(fake.api as any);
     const tool = getPlanTracker(fake);
@@ -263,16 +275,16 @@ describe("kata-backed plan_tracker", () => {
       hasUI: false,
     });
 
-    expect(result.details.kata.parentIssueNumber).toBe(130);
-    expect(result.details.tasks.map((task: any) => task.issueNumber)).toEqual([131]);
+    expect(result.details.kata.parentIssueRef).toBe("i130");
+    expect(result.details.tasks.map((task: any) => task.issueRef)).toEqual(["i131"]);
   });
 
   test("init retry from a different workspace does not resume partial kata plan", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(150, "Plan") },
+      { stdout: kataIssue("i150", "Plan") },
       { stdout: '{"error":{"message":"first child failed"}}', code: 1 },
-      { stdout: kataIssue(160, "Plan") },
-      { stdout: kataIssue(161, "Task 1: Setup") },
+      { stdout: kataIssue("i160", "Plan") },
+      { stdout: kataIssue("i161", "Task 1: Setup") },
     ]);
     planTrackerExtension(fake.api as any);
     const tool = getPlanTracker(fake);
@@ -287,15 +299,15 @@ describe("kata-backed plan_tracker", () => {
     });
 
     expectKataCall(fake.execCalls[2]!, ["--workspace", "/repo-b", "--json", "create", "Plan: Task 1: Setup"]);
-    expect(retried.details.kata.parentIssueNumber).toBe(160);
-    expect(retried.details.tasks.map((task: any) => task.issueNumber)).toEqual([161]);
+    expect(retried.details.kata.parentIssueRef).toBe("i160");
+    expect(retried.details.tasks.map((task: any) => task.issueRef)).toEqual(["i161"]);
   });
 
   test("init retry resumes parent-only partial kata plan", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(140, "Plan") },
+      { stdout: kataIssue("i140", "Plan") },
       { stdout: '{"error":{"message":"first child failed"}}', code: 1 },
-      { stdout: kataIssue(141, "Task 1: Setup") },
+      { stdout: kataIssue("i141", "Task 1: Setup") },
     ]);
     planTrackerExtension(fake.api as any);
     const tool = getPlanTracker(fake);
@@ -309,7 +321,7 @@ describe("kata-backed plan_tracker", () => {
       hasUI: false,
     });
 
-    expect(failed.details.kata.parentIssueNumber).toBe(140);
+    expect(failed.details.kata.parentIssueRef).toBe("i140");
     expectKataCall(fake.execCalls[2]!, [
       "--workspace",
       "/repo",
@@ -317,22 +329,22 @@ describe("kata-backed plan_tracker", () => {
       "create",
       "Task 1: Setup",
       "--body",
-      "Tracked by pi-superpowers-plus plan #140.",
+      "Tracked by pi-superpowers-plus plan kata#i140.",
       "--label",
       "pi-task",
       "--parent",
-      "140",
+      "i140",
     ]);
-    expect(retried.details.kata.parentIssueNumber).toBe(140);
-    expect(retried.details.tasks.map((task: any) => task.issueNumber)).toEqual([141]);
+    expect(retried.details.kata.parentIssueRef).toBe("i140");
+    expect(retried.details.tasks.map((task: any) => task.issueRef)).toEqual(["i141"]);
   });
 
   test("init retry resumes partial kata plan after child creation failure", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(110, "Plan") },
-      { stdout: kataIssue(111, "Task 1: Setup") },
+      { stdout: kataIssue("i110", "Plan") },
+      { stdout: kataIssue("i111", "Task 1: Setup") },
       { stdout: '{"error":{"message":"child creation failed"}}', code: 1 },
-      { stdout: kataIssue(112, "Task 2: Core") },
+      { stdout: kataIssue("i112", "Task 2: Core") },
     ]);
     planTrackerExtension(fake.api as any);
     const tool = getPlanTracker(fake);
@@ -353,8 +365,8 @@ describe("kata-backed plan_tracker", () => {
     );
 
     expect(failed.details.error).toContain("child creation failed");
-    expect(failed.details.kata.parentIssueNumber).toBe(110);
-    expect(failed.details.tasks.map((task: any) => task.issueNumber)).toEqual([111]);
+    expect(failed.details.kata.parentIssueRef).toBe("i110");
+    expect(failed.details.tasks.map((task: any) => task.issueRef)).toEqual(["i111"]);
     expectKataCall(fake.execCalls[3]!, [
       "--workspace",
       "/repo",
@@ -362,23 +374,23 @@ describe("kata-backed plan_tracker", () => {
       "create",
       "Task 2: Core",
       "--body",
-      "Tracked by pi-superpowers-plus plan #110.",
+      "Tracked by pi-superpowers-plus plan kata#i110.",
       "--label",
       "pi-task",
       "--parent",
-      "110",
+      "i110",
     ]);
-    expect(retried.details.kata.parentIssueNumber).toBe(110);
-    expect(retried.details.tasks.map((task: any) => task.issueNumber)).toEqual([111, 112]);
+    expect(retried.details.kata.parentIssueRef).toBe("i110");
+    expect(retried.details.tasks.map((task: any) => task.issueRef)).toEqual(["i111", "i112"]);
   });
 
   test("phase issue updates keep using the workspace captured on first phase update", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(91, "Workflow phase: brainstorm") },
-      { stdout: kataIssue(91) },
-      { stdout: kataIssue(91) },
-      { stdout: kataIssue(91) },
-      { stdout: kataIssue(91) },
+      { stdout: kataIssue("i91", "Workflow phase: brainstorm") },
+      { stdout: kataIssue("i91") },
+      { stdout: kataIssue("i91") },
+      { stdout: kataIssue("i91") },
+      { stdout: kataIssue("i91") },
     ]);
     planTrackerExtension(fake.api as any);
     const tool = getPlanTracker(fake);
@@ -404,15 +416,20 @@ describe("kata-backed plan_tracker", () => {
     });
 
     expect(
-      fake.execCalls.some((call) => call.args.join(" ") === "--workspace /repo-a --json close 91 --reason done"),
+      fake.execCalls.some(
+        (call) =>
+          call.args.slice(0, 7).join(" ") === "--workspace /repo-a --json close i91 --reason done" &&
+          call.args.includes("--message") &&
+          call.args.includes("--evidence"),
+      ),
     ).toBe(true);
   });
 
   test("complete update closes the mapped kata task issue", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(20, "Plan") },
-      { stdout: kataIssue(21) },
-      { stdout: kataIssue(21, "Task 1: Setup", "closed") },
+      { stdout: kataIssue("i20", "Plan") },
+      { stdout: kataIssue("i21") },
+      { stdout: kataIssue("i21", "Task 1: Setup", "closed") },
     ]);
     planTrackerExtension(fake.api as any);
     const tool = getPlanTracker(fake);
@@ -430,16 +447,21 @@ describe("kata-backed plan_tracker", () => {
     );
 
     expect(
-      fake.execCalls.some((call) => call.args.join(" ") === "--workspace /repo --json close 21 --reason done"),
+      fake.execCalls.some(
+        (call) =>
+          call.args.slice(0, 7).join(" ") === "--workspace /repo --json close i21 --reason done" &&
+          call.args.includes("--message") &&
+          call.args.includes("--evidence"),
+      ),
     ).toBe(true);
-    expect(result.details.tasks[0]).toMatchObject({ name: "Task 1: Setup", status: "complete", issueNumber: 21 });
+    expect(result.details.tasks[0]).toMatchObject({ name: "Task 1: Setup", status: "complete", issueRef: "i21" });
   });
 
   test("status refreshes mapped tasks from kata", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(30, "Plan") },
-      { stdout: kataIssue(31) },
-      { stdout: kataIssue(31, "Task 1: Setup", "closed") },
+      { stdout: kataIssue("i30", "Plan") },
+      { stdout: kataIssue("i31") },
+      { stdout: kataIssue("i31", "Task 1: Setup", "closed") },
     ]);
     planTrackerExtension(fake.api as any);
     const tool = getPlanTracker(fake);
@@ -455,15 +477,15 @@ describe("kata-backed plan_tracker", () => {
 
     expect(fake.execCalls.at(-1)).toMatchObject({
       command: "kata",
-      args: ["--workspace", "/repo", "--json", "show", "31"],
+      args: ["--workspace", "/repo", "--json", "show", "i31"],
     });
-    expect(result.content[0].text).toContain("✓ [0] #31 Task 1: Setup");
+    expect(result.content[0].text).toContain("✓ [0] kata#i31 Task 1: Setup");
   });
 
   test("update reports kata command failures without changing task status", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(40, "Plan") },
-      { stdout: kataIssue(41) },
+      { stdout: kataIssue("i40", "Plan") },
+      { stdout: kataIssue("i41") },
       {
         stdout:
           '{"error":{"code":"project_not_initialized","message":"no kata project is attached to this workspace"}}',
@@ -486,16 +508,16 @@ describe("kata-backed plan_tracker", () => {
     );
 
     expect(result.details.error).toContain("kata project is not initialized");
-    expect(result.details.tasks[0]).toMatchObject({ status: "pending", issueNumber: 41 });
+    expect(result.details.tasks[0]).toMatchObject({ status: "pending", issueRef: "i41" });
   });
 
   test("in_progress update is refreshed from kata labels", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(50, "Plan") },
-      { stdout: kataIssue(51) },
-      { stdout: kataIssue(51) },
-      { stdout: kataIssue(51) },
-      { stdout: kataIssue(51, "Task 1: Setup", "open", ["pi:in-progress"]) },
+      { stdout: kataIssue("i50", "Plan") },
+      { stdout: kataIssue("i51") },
+      { stdout: kataIssue("i51") },
+      { stdout: kataIssue("i51") },
+      { stdout: kataIssue("i51", "Task 1: Setup", "open", ["pi:in-progress"]) },
     ]);
     planTrackerExtension(fake.api as any);
     const tool = getPlanTracker(fake);
@@ -513,14 +535,14 @@ describe("kata-backed plan_tracker", () => {
       hasUI: false,
     });
 
-    expect(result.details.tasks[0]).toMatchObject({ status: "in_progress", issueNumber: 51 });
-    expect(result.content[0].text).toContain("→ [0] #51 Task 1: Setup");
+    expect(result.details.tasks[0]).toMatchObject({ status: "in_progress", issueRef: "i51" });
+    expect(result.content[0].text).toContain("→ [0] kata#i51 Task 1: Setup");
   });
 
   test("status reports kata failures instead of returning stale state", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(60, "Plan") },
-      { stdout: kataIssue(61) },
+      { stdout: kataIssue("i60", "Plan") },
+      { stdout: kataIssue("i61") },
       {
         stdout:
           '{"error":{"code":"project_not_initialized","message":"no kata project is attached to this workspace"}}',
@@ -545,9 +567,9 @@ describe("kata-backed plan_tracker", () => {
 
   test("updates mapped tasks in the workspace captured at init", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(70, "Plan") },
-      { stdout: kataIssue(71) },
-      { stdout: kataIssue(71, "Task 1: Setup", "closed") },
+      { stdout: kataIssue("i70", "Plan") },
+      { stdout: kataIssue("i71") },
+      { stdout: kataIssue("i71", "Task 1: Setup", "closed") },
     ]);
     planTrackerExtension(fake.api as any);
     const tool = getPlanTracker(fake);
@@ -562,17 +584,22 @@ describe("kata-backed plan_tracker", () => {
     });
 
     expect(
-      fake.execCalls.some((call) => call.args.join(" ") === "--workspace /repo-a --json close 71 --reason done"),
+      fake.execCalls.some(
+        (call) =>
+          call.args.slice(0, 7).join(" ") === "--workspace /repo-a --json close i71 --reason done" &&
+          call.args.includes("--message") &&
+          call.args.includes("--evidence"),
+      ),
     ).toBe(true);
   });
 
   test("pending update refreshes durable kata state after label removal failures", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(80, "Plan") },
-      { stdout: kataIssue(81) },
-      { stdout: kataIssue(81) },
+      { stdout: kataIssue("i80", "Plan") },
+      { stdout: kataIssue("i81") },
+      { stdout: kataIssue("i81") },
       { stdout: '{"error":{"message":"label removal failed"}}', code: 1 },
-      { stdout: kataIssue(81, "Task 1: Setup", "open", ["pi:in-progress"]) },
+      { stdout: kataIssue("i81", "Task 1: Setup", "open", ["pi:in-progress"]) },
     ]);
     planTrackerExtension(fake.api as any);
     const tool = getPlanTracker(fake);
@@ -593,16 +620,16 @@ describe("kata-backed plan_tracker", () => {
     );
 
     expect(result.details.error).toContain("label removal failed");
-    expect(result.details.tasks[0]).toMatchObject({ status: "in_progress", issueNumber: 81 });
+    expect(result.details.tasks[0]).toMatchObject({ status: "in_progress", issueRef: "i81" });
   });
 
   test("partial update refreshes the widget after durable kata state changes", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(84, "Plan") },
-      { stdout: kataIssue(85) },
-      { stdout: kataIssue(85, "Task 1: Setup", "closed") },
+      { stdout: kataIssue("i84", "Plan") },
+      { stdout: kataIssue("i85") },
+      { stdout: kataIssue("i85", "Task 1: Setup", "closed") },
       { stdout: '{"error":{"message":"label removal failed"}}', code: 1 },
-      { stdout: kataIssue(85, "Task 1: Setup", "closed", ["pi:in-progress"]) },
+      { stdout: kataIssue("i85", "Task 1: Setup", "closed", ["pi:in-progress"]) },
     ]);
     planTrackerExtension(fake.api as any);
     const tool = getPlanTracker(fake);
@@ -618,11 +645,11 @@ describe("kata-backed plan_tracker", () => {
 
   test("complete update refreshes durable kata state after label removal failures", async () => {
     const fake = createFakePi([
-      { stdout: kataIssue(82, "Plan") },
-      { stdout: kataIssue(83) },
-      { stdout: kataIssue(83, "Task 1: Setup", "closed") },
+      { stdout: kataIssue("i82", "Plan") },
+      { stdout: kataIssue("i83") },
+      { stdout: kataIssue("i83", "Task 1: Setup", "closed") },
       { stdout: '{"error":{"message":"label removal failed"}}', code: 1 },
-      { stdout: kataIssue(83, "Task 1: Setup", "closed", ["pi:in-progress"]) },
+      { stdout: kataIssue("i83", "Task 1: Setup", "closed", ["pi:in-progress"]) },
     ]);
     planTrackerExtension(fake.api as any);
     const tool = getPlanTracker(fake);
@@ -640,11 +667,11 @@ describe("kata-backed plan_tracker", () => {
     );
 
     expect(result.details.error).toContain("label removal failed");
-    expect(result.details.tasks[0]).toMatchObject({ status: "complete", issueNumber: 83 });
+    expect(result.details.tasks[0]).toMatchObject({ status: "complete", issueRef: "i83" });
   });
 
   test("reconstructs refreshed task state from recoverable error results", async () => {
-    const fake = createFakePi([{ stdout: kataIssue(101, "Task 1: Setup", "closed") }]);
+    const fake = createFakePi([{ stdout: kataIssue("i101", "Task 1: Setup", "closed") }]);
     planTrackerExtension(fake.api as any);
     const onSessionStart = fake.handlers.get("session_start")![0]!;
     await onSessionStart(
@@ -661,7 +688,7 @@ describe("kata-backed plan_tracker", () => {
                 details: {
                   action: "update",
                   error: "label removal failed",
-                  tasks: [{ name: "Task 1: Setup", status: "complete", issueNumber: 101 }],
+                  tasks: [{ name: "Task 1: Setup", status: "complete", issueRef: "i101" }],
                   kata: { workspace: "/repo" },
                 },
               },
@@ -678,9 +705,9 @@ describe("kata-backed plan_tracker", () => {
 
     expect(fake.execCalls[0]).toMatchObject({
       command: "kata",
-      args: ["--workspace", "/repo", "--json", "show", "101"],
+      args: ["--workspace", "/repo", "--json", "show", "i101"],
     });
-    expect(result.details.tasks[0]).toMatchObject({ status: "complete", issueNumber: 101 });
+    expect(result.details.tasks[0]).toMatchObject({ status: "complete", issueRef: "i101" });
   });
 
   test("status reports missing kata issue mappings", async () => {
@@ -700,7 +727,7 @@ describe("kata-backed plan_tracker", () => {
                 toolName: "plan_tracker",
                 details: {
                   action: "init",
-                  tasks: [{ name: "Legacy task", status: "pending" }],
+                  tasks: [{ name: "Unmapped task", status: "pending" }],
                   kata: { workspace: "/repo" },
                 },
               },
@@ -735,7 +762,7 @@ describe("kata-backed plan_tracker", () => {
                 toolName: "plan_tracker",
                 details: {
                   action: "init",
-                  tasks: [{ name: "Legacy task", status: "pending" }],
+                  tasks: [{ name: "Unmapped task", status: "pending" }],
                   kata: { workspace: "/repo" },
                 },
               },
@@ -754,7 +781,7 @@ describe("kata-backed plan_tracker", () => {
     );
 
     expect(result.details.error).toContain("missing kata issue mapping");
-    expect(result.details.tasks[0]).toMatchObject({ name: "Legacy task", status: "pending" });
+    expect(result.details.tasks[0]).toMatchObject({ name: "Unmapped task", status: "pending" });
   });
 
   test("reports kata initialization errors without mutating tracker state", async () => {
